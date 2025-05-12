@@ -1,0 +1,132 @@
+.stat-card {
+  transition: all 0.2s ease-in-out;
+}
+
+.stat-card:hover {
+  transform: translateY(-2px);
+}
+
+.map-container {
+  position: relative;
+  width: 100%;
+  height: 400px;
+  overflow: hidden;
+  border-radius: 0.5rem;
+}
+
+.chart-container {
+  height: 300px;
+  width: 100%;
+}
+
+/* Custom scrollbar for tables */
+.custom-scrollbar::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-track {
+  background: #f1f1f1;
+  border-radius: 4px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb {
+  background: #888;
+  border-radius: 4px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: #555;
+}
+
+/* Table styling enhancements */
+.table-enhanced th {
+  font-weight: 600;
+  text-transform: uppercase;
+  font-size: 0.75rem;
+  letter-spacing: 0.05em;
+  color: #64748b;
+}
+
+.table-enhanced tr {
+  transition: background-color 0.2s ease;
+}
+
+.table-enhanced tr:hover {
+  background-color: rgba(0, 0, 0, 0.02);
+}
+
+/* Status badges */
+.status-badge {
+  padding: 0.125rem 0.5rem;
+  border-radius: 9999px;
+  font-size: 0.75rem;
+  font-weight: 500;
+  display: inline-flex;
+  align-items: center;
+}
+
+.status-badge-success {
+  background-color: #dcfce7;
+  color: #166534;
+}
+
+.status-badge-warning {
+  background-color: #fef3c7;
+  color: #92400e;
+}
+
+.status-badge-error {
+  background-color: #fee2e2;
+  color: #991b1b;
+}
+
+.status-badge-info {
+  background-color: #dbeafe;
+  color: #1e3a8a;
+}
+
+/* Dark mode overwrites */
+.dark .status-badge-success {
+  background-color: rgba(22, 101, 52, 0.3);
+  color: #4ade80;
+}
+
+.dark .status-badge-warning {
+  background-color: rgba(146, 64, 14, 0.3);
+  color: #fbbf24;
+}
+
+.dark .status-badge-error {
+  background-color: rgba(153, 27, 27, 0.3);
+  color: #f87171;
+}
+
+.dark .status-badge-info {
+  background-color: rgba(30, 58, 138, 0.3);
+  color: #60a5fa;
+}
+
+/* Chart Animations */
+@keyframes barGrow {
+  from {
+    transform: scaleY(0);
+  }
+  to {
+    transform: scaleY(1);
+  }
+}
+
+.recharts-bar-rectangle {
+  transform-origin: bottom;
+  animation: barGrow 0.6s ease-out forwards;
+}
+
+.recharts-bar-rectangle:hover {
+  filter: brightness(1.1);
+  transition: filter 0.2s ease-out;
+}
+
+.recharts-tooltip-wrapper {
+  transition: transform 0.2s ease-out, opacity 0.2s ease-out;
+}

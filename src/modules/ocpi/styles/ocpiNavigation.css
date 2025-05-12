@@ -1,0 +1,43 @@
+/* 
+ * OCPI Navigation CSS
+ * This CSS ensures that critical OCPI navigation items are always visible
+ */
+
+/* Ensure OCPI section is always displayed */
+[data-section-id="ocpi"] {
+  display: block !important;
+}
+
+/* Don't force the section to be expanded - only force item visibility when expanded */
+/* This allows the section to be collapsed normally */
+
+/* Ensure Connection Management item is always visible */
+a[href^="/ocpi/connections"] {
+  display: flex !important;
+  visibility: visible !important;
+  opacity: 1 !important;
+  font-weight: 500 !important;
+}
+
+/* Ensure Party Management item is always visible */
+a[href^="/ocpi/cpo/parties"] {
+  display: flex !important;
+  visibility: visible !important;
+  opacity: 1 !important;  
+  font-weight: 500 !important;
+}
+
+/* Add a special background to ensure they stand out */
+a[href^="/ocpi/connections"],
+a[href^="/ocpi/cpo/parties"] {
+  position: relative !important;
+  z-index: 5 !important;
+}
+
+/* Section items container must be visible */
+#section-ocpi-items {
+  display: block !important;
+  height: auto !important;
+  visibility: visible !important;
+  opacity: 1 !important;
+}
