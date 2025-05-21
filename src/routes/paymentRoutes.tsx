@@ -11,11 +11,7 @@ import PromotionsPage from "@/modules/payments/pages/promotions/PromotionsPage";
 import PromotionDetailPage from "@/modules/payments/pages/promotions/PromotionDetailPage";
 import PromotionCreatePage from "@/modules/payments/pages/promotions/PromotionCreatePage";
 import PromotionEditPage from "@/modules/payments/pages/promotions/PromotionEditPage";
-import WalletsPage from "@/modules/payments/pages/wallets/WalletsPage";
-import WalletDetailPage from "@/modules/payments/pages/wallets/WalletDetailPage";
-import WalletTopupPage from "@/modules/payments/pages/wallets/WalletTopupPage";
-import WalletHistoryPage from "@/modules/payments/pages/wallets/WalletHistoryPage";
-import WalletApiTest from "@/modules/payments/pages/wallets/WalletApiTest";
+import { WalletsPage, WalletDetailPage } from "@/modules/payments/pages/wallets";
 import TransactionsPage from "@/modules/payments/pages/transactions/TransactionsPage";
 import TransactionDetailPage from "@/modules/payments/pages/transactions/TransactionDetailPage";
 import TaxTemplatesPage from "@/modules/payments/pages/taxTemplates/TaxTemplatesPage";
@@ -63,11 +59,7 @@ export const paymentRoutes = (
     {/* Wallets */}
     <Route path="wallets">
       <Route index element={<WalletsPage />} />
-      <Route path="create" element={<WalletDetailPage />} /> {/* Added create route */}
       <Route path=":id" element={<WalletDetailPage />} />
-      <Route path=":id/topup" element={<WalletTopupPage />} />
-      <Route path=":id/history" element={<WalletHistoryPage />} />
-      <Route path="api-test" element={<WalletApiTest />} /> {/* Test route for API debugging */}
     </Route>
     
     {/* Transactions */}

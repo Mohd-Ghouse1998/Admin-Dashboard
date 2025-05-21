@@ -1,6 +1,19 @@
 // API service for handling authentication and other API requests
 import axios, { AxiosInstance, AxiosRequestConfig, AxiosHeaders } from 'axios';
 
+// Helper function to get the direct API base URL for a specific tenant domain
+const getDirectApiBase = (tenantDomain: string): string => {
+  const isLocalDev = window.location.hostname === 'localhost' || window.location.hostname.endsWith('.localhost');
+  
+  // If we're running locally but want to use a different tenant domain
+  if (isLocalDev && tenantDomain !== window.location.hostname) {
+    return `http://${tenantDomain}`;
+  }
+  
+  // For production or when using the same domain
+  return window.location.origin;
+};
+
 // Get host information for API requests
 const getApiHost = () => {
   // Always use the current hostname to maintain tenant context
@@ -64,7 +77,19 @@ export const apiService = {
   // Auth methods
   login: async (username: string, password: string) => {
     try {
-      const response = await axiosInstance.post('/api/users/login_with_password/', { username, password });
+      // Get tenant domain for consistent API calls
+      const tenantDomain = localStorage.getItem('tenant_domain') || window.location.hostname;
+      console.log(`Authenticating with tenant domain: ${tenantDomain}`);
+      
+      // Create a direct axios instance to ensure tenant domain is used
+      const apiBase = getDirectApiBase(tenantDomain);
+      console.log(`Using API base for login: ${apiBase}`);
+      
+      const response = await axios.post(
+        `${apiBase}/api/users/login_with_password/`, 
+        { username, password }
+      );
+      
       return response.data;
     } catch (error) {
       console.error('Login request failed:', error);
@@ -74,7 +99,18 @@ export const apiService = {
   
   logout: async (refreshToken: string) => {
     try {
-      const response = await axiosInstance.post('/api/users/logout/', { refresh_token: refreshToken });
+      // Get tenant domain for consistent API calls
+      const tenantDomain = localStorage.getItem('tenant_domain') || window.location.hostname;
+      
+      // Create a direct axios instance to ensure tenant domain is used
+      const apiBase = getDirectApiBase(tenantDomain);
+      console.log(`Using API base for logout: ${apiBase}`);
+      
+      const response = await axios.post(
+        `${apiBase}/api/users/logout/`, 
+        { refresh_token: refreshToken }
+      );
+      
       return response.data;
     } catch (error) {
       console.error('Logout request failed:', error);
@@ -84,7 +120,18 @@ export const apiService = {
   
   refreshToken: async (refreshToken: string) => {
     try {
-      const response = await axiosInstance.post('/api/users/refresh_token/', { refresh: refreshToken });
+      // Get tenant domain for consistent API calls
+      const tenantDomain = localStorage.getItem('tenant_domain') || window.location.hostname;
+      
+      // Create a direct axios instance to ensure tenant domain is used
+      const apiBase = getDirectApiBase(tenantDomain);
+      console.log(`Using API base for token refresh: ${apiBase}`);
+      
+      const response = await axios.post(
+        `${apiBase}/api/users/refresh_token/`, 
+        { refresh: refreshToken }
+      );
+      
       return response.data;
     } catch (error) {
       console.error('Token refresh failed:', error);
@@ -125,7 +172,21 @@ export const apiService = {
   // User methods - Update profile endpoints
   getCurrentUser: async () => {
     try {
-      const response = await axiosInstance.get('/api/users/users/me/');
+      // Get tenant domain for consistent API calls
+      const tenantDomain = localStorage.getItem('tenant_domain') || window.location.hostname;
+      
+      // Create a direct axios instance to ensure tenant domain is used
+      const apiBase = getDirectApiBase(tenantDomain);
+      console.log(`Using API base for getCurrentUser: ${apiBase}`);
+      
+      // Get the token for authorization
+      const token = localStorage.getItem('accessToken');
+      
+      const response = await axios.get(
+        `${apiBase}/api/users/users/me/`,
+        { headers: { Authorization: `Bearer ${token}` }}
+      );
+      
       return response.data;
     } catch (error) {
       console.error('Get current user failed:', error);
@@ -207,16 +268,41 @@ export const apiService = {
   
   validateDomain: async () => {
     try {
-      // Add domain as query param for local development environments
-      let url = `/api/tenant/validate-domain/`;
+      // Get tenant domain from URL parameter or localStorage
+      const urlParams = new URLSearchParams(window.location.search);
+      const queryTenantDomain = urlParams.get('tenant_domain');
+      const storedTenantDomain = localStorage.getItem('tenant_domain');
       
-      if (
-        window.location.hostname === 'localhost' ||
-        window.location.hostname.endsWith('.localhost')
-      ) {
-        url += `?domain=${window.location.hostname}`;
+      // Use tenant domain from parameter, storage, or current hostname
+      const domainToValidate = queryTenantDomain || storedTenantDomain || window.location.hostname;
+      console.log('Validating tenant domain:', domainToValidate);
+      
+      // For production tenants, we need to make a direct call to that tenant's API
+      const isLocalDevelopment = 
+        window.location.hostname === 'localhost' || 
+        window.location.hostname.endsWith('.localhost');
+      
+      const isProductionTenant = 
+        domainToValidate !== 'localhost' && 
+        !domainToValidate.endsWith('.localhost');
+      
+      // If we're on localhost but validating a production tenant, make a direct call
+      if (isLocalDevelopment && isProductionTenant) {
+        // Make a direct call to the tenant's domain
+        console.log(`Directly validating production tenant: ${domainToValidate}`);
+        const directUrl = `http://${domainToValidate}/api/tenant/validate-domain/?domain=${domainToValidate}`;
+        const response = await axios.get(directUrl);
+        
+        // Store the domain for future API calls
+        if (response.data && response.data.is_valid) {
+          localStorage.setItem('tenant_domain', domainToValidate);
+        }
+        
+        return response.data;
       }
       
+      // Normal validation via axiosInstance
+      const url = `/api/tenant/validate-domain/?domain=${domainToValidate}`;
       const response = await axiosInstance.get(url);
       return response.data;
     } catch (error) {

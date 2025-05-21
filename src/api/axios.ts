@@ -1,14 +1,39 @@
 
 import axios, { AxiosError, AxiosInstance, AxiosRequestConfig, InternalAxiosRequestConfig, AxiosHeaders } from 'axios';
 
-// Get base URL based on environment
+/**
+ * Gets the API base URL for the current tenant
+ * Supports local frontend development with production backend tenants
+ */
 const getBaseUrl = (): string => {
-  // Always use the current hostname to maintain tenant context
-  const hostname = window.location.hostname;
-  const isLocalDev = hostname === 'localhost' || hostname.endsWith('.localhost');
+  // 1. Check for explicit tenant override in localStorage or query param
+  const storedTenantDomain = localStorage.getItem('tenant_domain');
+  const urlParams = new URLSearchParams(window.location.search);
+  const queryTenantDomain = urlParams.get('tenant_domain');
   
-    // Use port 8000 for backend API calls in development
-  return isLocalDev ? `http://${hostname}:8000` : `https://${hostname}`;
+  // Use the override domain if available
+  const overrideDomain = queryTenantDomain || storedTenantDomain;
+  
+  // 2. Get current domain from browser
+  const protocol = window.location.protocol; // http: or https:
+  const hostname = window.location.hostname; // e.g., localhost or platform-api-test.joulepoint.com
+  
+  // 3. Determine if we're in local development
+  const isLocalDevelopment = hostname === 'localhost' || hostname.endsWith('.localhost');
+  
+  // 4. When in local development but connecting to production backend
+  if (isLocalDevelopment && overrideDomain && !overrideDomain.includes('localhost')) {
+    // Use the production tenant domain for API calls
+    const baseUrl = `http://${overrideDomain}`;
+    console.log(`Using production tenant API: ${baseUrl} (from override)`); 
+    return baseUrl;
+  }
+  
+  // 5. Normal development or production scenarios
+  const developmentPort = isLocalDevelopment ? ':8000' : '';
+  const baseUrl = `${protocol}//${hostname}${developmentPort}`;
+  console.log(`Using API base URL: ${baseUrl} (from current domain)`);
+  return baseUrl;
 };
 
 // Create axios instance with default config

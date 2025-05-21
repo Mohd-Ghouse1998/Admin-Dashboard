@@ -382,10 +382,8 @@ export const navigationConfig: NavSection[] = [
         href: "/payment/wallets",
         icon: Wallet,
         children: [
-          { name: "Users Wallets", href: "/payment/wallets" },
+          { name: "Wallet Management", href: "/payment/wallets" },
           { name: "Wallet Details", href: "/payment/wallets/:id" },
-          { name: "TopUp Wallet", href: "/payment/wallets/:id/topup" },
-          { name: "Wallet History", href: "/payment/wallets/:id/history" },
         ],
       },
       {

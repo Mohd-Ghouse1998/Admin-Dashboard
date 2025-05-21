@@ -1,4 +1,4 @@
-import React, { createContext, useState, useEffect, useContext } from 'react';
+import React, { createContext, useState, useEffect, useContext, useRef, useCallback } from 'react';
 import { apiService } from '@/services/api';
 import { useToast } from '@/hooks/use-toast';
 import { useTenant } from './TenantContext';
@@ -42,6 +42,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
   const { toast } = useToast();
+  
+  // Use a ref to track if user data is being fetched to prevent infinite loops
+  const isFetchingUser = useRef(false);
+  const hasAttemptedFetch = useRef(false);
 
   // Check if the user is authenticated
   const isAuthenticated = !!accessToken;
@@ -52,7 +56,16 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setError(null);
     try {
       // Use the current domain to ensure tenant schema context is preserved
-      const response = await fetch('/api/users/login_with_password/', {
+      // Get the tenant domain to use for API calls
+      const tenantDomain = localStorage.getItem('tenant_domain') || window.location.hostname;
+      const isLocalDev = window.location.hostname === 'localhost' || window.location.hostname.endsWith('.localhost');
+      const apiBase = isLocalDev && tenantDomain !== window.location.hostname ? 
+        `http://${tenantDomain}` : 
+        window.location.origin;
+      
+      console.log(`Using tenant domain for login: ${tenantDomain}, API base: ${apiBase}`);
+      
+      const response = await fetch(`${apiBase}/api/users/login_with_password/`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -85,11 +98,18 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
   
   // Handle forgot password
-  const forgotPassword = async (email: string) => {
+  const forgotPassword = useCallback(async (email: string) => {
     setIsLoading(true);
     setError(null);
     try {
-      const response = await fetch('/api/users/forgot_password/', {
+      // Implement the actual forgot password logic here
+      const tenantDomain = localStorage.getItem('tenant_domain') || window.location.hostname;
+      const isLocalDev = window.location.hostname === 'localhost' || window.location.hostname.endsWith('.localhost');
+      const apiBase = isLocalDev && tenantDomain !== window.location.hostname ? 
+        `http://${tenantDomain}` : 
+        window.location.origin;
+        
+      const response = await fetch(`${apiBase}/api/users/forgot_password/`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -98,28 +118,35 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       });
       
       if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.message || `Forgot password failed: ${response.statusText}`);
+        throw new Error(`Password reset request failed: ${response.statusText}`);
       }
       
+      toast({
+        title: "Password Reset Initiated",
+        description: "Check your email for password reset instructions.",
+        variant: "default"
+      });
       setIsLoading(false);
-    } catch (error: any) {
+    } catch (error) {
       setIsLoading(false);
-      setError(error.message || 'An error occurred while processing your request');
+      toast({
+        title: "Error",
+        description: "Failed to initiate password reset. Please try again.",
+        variant: "destructive"
+      });
       console.error('Forgot password error:', error);
       throw error;
     }
-  };
+  }, [toast]); 
   
   // Handle logout
-  const logout = () => {
-    // Clear tokens
-    localStorage.removeItem('accessToken');
-    localStorage.removeItem('refreshToken');
-    
+  const logout = useCallback(() => {
+    // Clear tokens from state and localStorage
+    setUser(null);
     setAccessToken(null);
     setRefreshToken(null);
-    setUser(null);
+    localStorage.removeItem('accessToken');
+    localStorage.removeItem('refreshToken');
     
     // Display success message
     toast({
@@ -127,16 +154,25 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       description: "You have been successfully logged out.",
       variant: "default"
     });
-  };
+  }, [toast]); 
   
   // Refresh the access token
-  const refreshAccessToken = async () => {
+  const refreshAccessToken = useCallback(async (): Promise<boolean> => {
     if (!refreshToken) {
       return false;
     }
     
     try {
-      const response = await fetch('/api/users/refresh_token/', {
+      // Get the tenant domain to use for API calls
+      const tenantDomain = localStorage.getItem('tenant_domain') || window.location.hostname;
+      const isLocalDev = window.location.hostname === 'localhost' || window.location.hostname.endsWith('.localhost');
+      const apiBase = isLocalDev && tenantDomain !== window.location.hostname ? 
+        `http://${tenantDomain}` : 
+        window.location.origin;
+      
+      console.log(`Using tenant domain for token refresh: ${tenantDomain}, API base: ${apiBase}`);
+      
+      const response = await fetch(`${apiBase}/api/users/refresh_token/`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -157,32 +193,65 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       logout();
       return false;
     }
-  };
+  }, [refreshToken, logout]);
   
   // Fetch user data on mount if authenticated and tenant is loaded
   useEffect(() => {
     const fetchUser = async () => {
-      if (accessToken && tenant) { // Only fetch user data if tenant is loaded
-        try {
-          const userData = await apiService.get('/api/users/users/me/', accessToken);
-          setUser(userData);
-        } catch (error) {
-          console.error('Error fetching user data:', error);
-          // Try to refresh token if fetching fails
-          const refreshed = await refreshAccessToken();
-          if (!refreshed) {
-            logout();
-          }
-        } finally {
-          setIsLoading(false);
-        }
-      } else {
+      // Skip if we don't have the required data or already fetching
+      if (!accessToken || !tenant || isFetchingUser.current || hasAttemptedFetch.current) {
         setIsLoading(false);
+        return;
+      }
+      
+      try {
+        // Mark that we're fetching to prevent duplicate calls
+        isFetchingUser.current = true;
+        hasAttemptedFetch.current = true;
+        
+        // Get tenant domain for consistent API calls
+        const tenantDomain = localStorage.getItem('tenant_domain') || window.location.hostname;
+        const isLocalDev = window.location.hostname === 'localhost' || window.location.hostname.endsWith('.localhost');
+        const apiBase = isLocalDev && tenantDomain !== window.location.hostname ? 
+          `http://${tenantDomain}` : 
+          window.location.origin;
+        
+        console.log(`Using tenant domain for fetchUser: ${tenantDomain}, API base: ${apiBase}`);
+        
+        // Use direct fetch with the correct tenant domain
+        const response = await fetch(`${apiBase}/api/users/users/me/`, {
+          headers: {
+            'Authorization': `Bearer ${accessToken}`,
+            'Content-Type': 'application/json'
+          }
+        });
+        
+        if (!response.ok) {
+          throw new Error(`Failed to fetch user data: ${response.status}`);
+        }
+        
+        const userData = await response.json();
+        setUser(userData);
+      } catch (error) {
+        console.error('Error fetching user data:', error);
+        // Try to refresh token if fetching fails
+        const refreshed = await refreshAccessToken();
+        if (!refreshed) {
+          logout();
+        }
+      } finally {
+        setIsLoading(false);
+        isFetchingUser.current = false;
       }
     };
     
     fetchUser();
-  }, [accessToken, tenant]); // Add tenant as dependency
+    
+    // Cleanup function to reset the fetch flag when component unmounts
+    return () => {
+      isFetchingUser.current = false;
+    };
+  }, [accessToken, tenant]); // Remove function dependencies
   
   const contextValue: AuthContextType = {
     user,

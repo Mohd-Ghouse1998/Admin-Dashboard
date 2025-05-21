@@ -41,8 +41,17 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
           // Set auth headers
           axios.defaults.headers.common['Authorization'] = `Bearer ${token}`;
           
-          // Fetch current user
-          const response = await axios.get('/api/users/users/me/');
+          // Get tenant domain for consistent API calls
+          const tenantDomain = localStorage.getItem('tenant_domain') || window.location.hostname;
+          const isLocalDev = window.location.hostname === 'localhost' || window.location.hostname.endsWith('.localhost');
+          const apiBase = isLocalDev && tenantDomain !== window.location.hostname ? 
+            `http://${tenantDomain}` : 
+            window.location.origin;
+          
+          console.log(`Using tenant domain for checkAuth: ${tenantDomain}, API base: ${apiBase}`);
+          
+          // Fetch current user with the correct tenant domain
+          const response = await axios.get(`${apiBase}/api/users/users/me/`);
           setUser(response.data);
           setAccessToken(token);
           setIsAuthenticated(true);
