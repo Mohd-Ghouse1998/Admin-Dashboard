@@ -1,23 +1,44 @@
 
 import React, { useEffect } from 'react';
-import { Helmet } from 'react-helmet-async';
-import { useNavigate, useParams } from 'react-router-dom';
-import { PageLayout } from '@/components/layout/PageLayout';
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Switch } from '@/components/ui/switch';
-import { Separator } from '@/components/ui/separator';
-import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
-import { AlertCircle, Loader2 } from 'lucide-react';
-import { useForm, Controller } from 'react-hook-form';
+import { useParams, useNavigate } from 'react-router-dom';
+import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
-import * as z from 'zod';
+import { z } from 'zod';
 import { useChargers } from '@/modules/chargers/hooks/useChargers';
+import { EditTemplate } from '@/components/templates/edit/EditTemplate';
+import {
+  Form,
+  FormControl,
+  FormDescription,
+  FormField,
+  FormItem,
+  FormLabel,
+  FormMessage,
+} from '@/components/ui/form';
+import { Input } from '@/components/ui/input';
+import {
+  Card,
+  CardContent,
+  CardHeader,
+  CardTitle,
+} from '@/components/ui/card';
+import {
+  Select,
+  SelectTrigger,
+  SelectValue,
+  SelectContent,
+  SelectItem
+} from '@/components/ui/select';
+import { Switch } from '@/components/ui/switch';
+import {
+  Zap,
+  MapPin,
+  Settings,
+  Shield,
+  DollarSign,
+  CheckCircle,
+} from 'lucide-react';
 
-// Define schema for form validation
 const chargerSchema = z.object({
   charger_id: z.string().min(1, 'Charger ID is required'),
   name: z.string().min(1, 'Name is required'),
@@ -32,52 +53,22 @@ const chargerSchema = z.object({
   ocpi_id: z.string().optional().nullable(),
   publish_to_ocpi: z.boolean().default(false),
   coordinates: z.object({
-    type: z.literal('Point'),
+    type: z.literal('Point').default('Point'),
     coordinates: z.tuple([
       z.coerce.number().min(-180).max(180), // longitude
       z.coerce.number().min(-90).max(90),   // latitude
     ])
-  }).optional().nullable()
+  }).default({ type: 'Point', coordinates: [0, 0] }),
 });
 
 type ChargerFormValues = z.infer<typeof chargerSchema>;
 
-// Define interface for API response properties
-interface ChargerProperties {
-  charger_id?: string;
-  name?: string;
-  address?: string;
-  vendor?: string;
-  model?: string;
-  enabled?: boolean;
-  price_per_kwh?: number;
-  type?: 'AC' | 'DC' | 'BOTH';
-  meter_value_interval?: number;
-  verified?: boolean;
-  ocpi_id?: string;
-  publish_to_ocpi?: boolean;
-  [key: string]: any; // Allow for additional properties
-}
-
-const ChargerEditPage = () => {
+const ChargerEditPage: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
-  const {
-    getCharger,
-    updateCharger,
-    isLoading,
-    isUpdating,
-  } = useChargers('');
-  
-  // Initialize form with react-hook-form and zod validation
-  const {
-    control,
-    register,
-    handleSubmit,
-    reset,
-    formState: { errors },
-    setError
-  } = useForm<ChargerFormValues>({
+  const { getCharger, updateCharger, isLoading, error } = useChargers();
+
+  const form = useForm<ChargerFormValues>({
     resolver: zodResolver(chargerSchema),
     defaultValues: {
       charger_id: '',
@@ -90,406 +81,360 @@ const ChargerEditPage = () => {
       type: 'AC',
       meter_value_interval: 300,
       verified: false,
+      ocpi_id: '',
       publish_to_ocpi: false,
-      coordinates: {
-        type: 'Point',
-        coordinates: [0, 0]
-      }
-    }
+      coordinates: { type: 'Point', coordinates: [0, 0] },
+    },
   });
 
-  // Fetch charger data on mount
   useEffect(() => {
-    const fetchCharger = async () => {
-      if (!id) return;
-      
-      try {
-        const response = await getCharger(id);
-        console.log('Charger data for edit form:', response);
-        
-        if (!response) return;
-        
-        let properties: ChargerProperties = {};
-        let geometry = null;
-        
-        // Case 1: GeoJSON Feature format (as shown in the sample response)
-        if (response && response.type === 'Feature' && response.properties) {
-          console.log('Processing GeoJSON Feature for edit form');
-          properties = response.properties;
-          geometry = response.geometry;
+    if (id) {
+      getCharger(id).then((charger) => {
+        if (charger) {
+          form.reset({
+            ...charger,
+            coordinates: charger.coordinates || { type: 'Point', coordinates: [0, 0] },
+          });
         }
-        // Case 2: FeatureCollection with features array
-        else if (response && response.features && Array.isArray(response.features) && response.features.length > 0) {
-          console.log('Processing FeatureCollection for edit form');
-          const feature = response.features[0];
-          properties = feature.properties || {};
-          geometry = feature.geometry;
-        }
-        // Case 3: Direct object with properties already flattened
-        else if (response && typeof response === 'object') {
-          console.log('Processing direct object for edit form');
-          properties = response;
-          geometry = response.geometry;
-        }
-        
-        console.log('Extracted properties for form:', properties);
-        
-        reset({
-          charger_id: properties.charger_id || '',
-          name: properties.name || '',
-          address: properties.address || '',
-          vendor: properties.vendor || '',
-          model: properties.model || '',
-          enabled: properties.enabled || false,
-          price_per_kwh: properties.price_per_kwh || 0,
-          type: (properties.type as 'AC' | 'DC' | 'BOTH') || 'AC',
-          meter_value_interval: properties.meter_value_interval || 300,
-          verified: properties.verified || false,
-          ocpi_id: properties.ocpi_id || '',
-          publish_to_ocpi: properties.publish_to_ocpi || false,
-          coordinates: geometry ? {
-            type: 'Point',
-            coordinates: [
-              geometry.coordinates?.[0] || 0, // longitude
-              geometry.coordinates?.[1] || 0  // latitude
-            ]
-          } : null
-        });
-      } catch (error) {
-        console.error('Error fetching charger:', error);
-      }
-    };
-    
-    fetchCharger();
-  }, [id, getCharger, reset]);
+      });
+    }
+  }, [id]);
 
-  const onSubmit = async (data: ChargerFormValues) => {
+  const onSubmit = async (values: ChargerFormValues) => {
     if (!id) return;
-    
-    try {
-      // Transform form data to match the expected API format
-      const chargerData = {
-        ...data,
-        // Transform GeoJSON coordinates to the format expected by the API
-        coordinates: data.coordinates?.coordinates ? {
-          // The Charger type expects {latitude, longitude} rather than GeoJSON format
-          latitude: data.coordinates.coordinates[1],
-          longitude: data.coordinates.coordinates[0],
-        } : undefined
-      };
-      
-      // Call the API to update the charger
-      await updateCharger({ id, data: chargerData });
-      
-      // Redirect to chargers list on success
+    const updated = await updateCharger(id, values);
+    if (updated) {
       navigate('/chargers');
-    } catch (error: any) {
-      // Handle API errors
-      if (error.response?.data) {
-        // Map backend validation errors to form fields
-        const { data } = error.response;
-        Object.keys(data).forEach(key => {
-          if (key in data && data[key]) {
-            setError(key as any, {
-              type: 'manual',
-              message: Array.isArray(data[key]) ? data[key][0] : data[key]
-            });
-          }
-        });
-      }
     }
   };
-  
+
   return (
-    <PageLayout
+    <EditTemplate
       title="Edit Charger"
-      description="Modify charger configuration"
-      backButton
-      backTo="/chargers"
+      subtitle={id ? `Charger ID: ${id}` : undefined}
+      description="Edit charger details and configuration"
+      icon={<Zap className="h-5 w-5" />}
+      entityName="Charger"
+      backPath="/chargers"
+      isLoading={isLoading}
+      isSubmitting={form.formState.isSubmitting}
+      error={error}
+      onSubmit={form.handleSubmit(onSubmit)}
+      className="max-w-full container-fluid px-6"
     >
-      <Helmet>
-        <title>Edit Charger | Electric Flow Admin Portal</title>
-      </Helmet>
-      
-      {isLoading ? (
-        <div className="flex items-center justify-center py-12">
-          <Loader2 className="h-8 w-8 animate-spin text-primary" />
-          <span className="ml-2">Loading charger data...</span>
-        </div>
-      ) : (
-        <form onSubmit={handleSubmit(onSubmit)}>
-          <Card className="mb-8">
-            <CardHeader>
-              <CardTitle>Basic Information</CardTitle>
-              <CardDescription>Edit the details for this charger</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <div className="grid gap-6 md:grid-cols-2">
-                <div className="space-y-2">
-                  <Label htmlFor="charger_id">Charger ID <span className="text-destructive">*</span></Label>
-                  <Input
-                    id="charger_id"
-                    placeholder="e.g., CP001"
-                    {...register('charger_id')}
-                    className={errors.charger_id ? 'border-destructive' : ''}
-                  />
-                  {errors.charger_id && (
-                    <p className="text-sm text-destructive">{errors.charger_id.message}</p>
+      <Form {...form}>
+        <div className="grid grid-cols-1 gap-6">
+          {/* Basic Information Card */}
+          <Card className="overflow-hidden border-primary/10">
+            <div className="bg-gradient-to-r from-primary/5 to-primary/10 py-3 px-6 border-b border-primary/10">
+              <h3 className="font-medium flex items-center gap-2">
+                <Zap className="h-4 w-4 text-primary" />
+                Basic Information
+              </h3>
+              <p className="text-xs text-muted-foreground mt-1">General charger details</p>
+            </div>
+            <CardContent className="p-6">
+              <div className="grid gap-6 sm:grid-cols-2">
+                <FormField
+                  control={form.control}
+                  name="charger_id"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Charger ID</FormLabel>
+                      <FormControl>
+                        <Input placeholder="CP001" {...field} />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
                   )}
-                </div>
-                
-                <div className="space-y-2">
-                  <Label htmlFor="name">Name <span className="text-destructive">*</span></Label>
-                  <Input
-                    id="name"
-                    placeholder="e.g., Main Street Charger"
-                    {...register('name')}
-                    className={errors.name ? 'border-destructive' : ''}
-                  />
-                  {errors.name && (
-                    <p className="text-sm text-destructive">{errors.name.message}</p>
+                />
+                <FormField
+                  control={form.control}
+                  name="name"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Name</FormLabel>
+                      <FormControl>
+                        <Input placeholder="Main Street Charger" {...field} />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
                   )}
-                </div>
-                
-                <div className="space-y-2 md:col-span-2">
-                  <Label htmlFor="address">Address <span className="text-destructive">*</span></Label>
-                  <Input
-                    id="address"
-                    placeholder="e.g., 123 Main St, City, State"
-                    {...register('address')}
-                    className={errors.address ? 'border-destructive' : ''}
-                  />
-                  {errors.address && (
-                    <p className="text-sm text-destructive">{errors.address.message}</p>
+                />
+                <FormField
+                  control={form.control}
+                  name="address"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Address</FormLabel>
+                      <FormControl>
+                        <Input placeholder="123 Main St, City, State" {...field} />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
                   )}
-                </div>
-                              
-                <div className="space-y-2">
-                  <Label htmlFor="type">Charger Type</Label>
-                  <Controller
-                    control={control}
-                    name="type"
-                    render={({ field }) => (
-                      <Select
-                        onValueChange={field.onChange}
-                        defaultValue={field.value}
-                        value={field.value}
-                      >
-                        <SelectTrigger>
-                          <SelectValue placeholder="Select charger type" />
-                        </SelectTrigger>
+                />
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Location Information */}
+          <Card className="overflow-hidden border-primary/10">
+            <div className="bg-gradient-to-r from-primary/5 to-primary/10 py-3 px-6 border-b border-primary/10">
+              <h3 className="font-medium flex items-center gap-2">
+                <MapPin className="h-4 w-4 text-primary" />
+                Location Information
+              </h3>
+              <p className="text-xs text-muted-foreground mt-1">Geographic coordinates</p>
+            </div>
+            <CardContent className="p-6">
+              <div className="grid gap-6 sm:grid-cols-2">
+                <FormField
+                  control={form.control}
+                  name="coordinates.coordinates.0"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Longitude</FormLabel>
+                      <FormControl>
+                        <Input type="number" step="0.000001" placeholder="77.5946" {...field} />
+                      </FormControl>
+                      <FormDescription>East-west position (decimal degrees)</FormDescription>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                <FormField
+                  control={form.control}
+                  name="coordinates.coordinates.1"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Latitude</FormLabel>
+                      <FormControl>
+                        <Input type="number" step="0.000001" placeholder="12.9716" {...field} />
+                      </FormControl>
+                      <FormDescription>North-south position (decimal degrees)</FormDescription>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Vendor & Model */}
+          <Card className="overflow-hidden border-primary/10">
+            <div className="bg-gradient-to-r from-primary/5 to-primary/10 py-3 px-6 border-b border-primary/10">
+              <h3 className="font-medium flex items-center gap-2">
+                <Settings className="h-4 w-4 text-primary" />
+                Vendor & Model
+              </h3>
+              <p className="text-xs text-muted-foreground mt-1">Manufacturer and model details</p>
+            </div>
+            <CardContent className="p-6">
+              <div className="grid gap-6 sm:grid-cols-2">
+                <FormField
+                  control={form.control}
+                  name="vendor"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Vendor</FormLabel>
+                      <FormControl>
+                        <Input placeholder="Tata Power" {...field} />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                <FormField
+                  control={form.control}
+                  name="model"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Model</FormLabel>
+                      <FormControl>
+                        <Input placeholder="EVSE-2023" {...field} />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Status & Verification */}
+          <Card className="overflow-hidden border-primary/10">
+            <div className="bg-gradient-to-r from-primary/5 to-primary/10 py-3 px-6 border-b border-primary/10">
+              <h3 className="font-medium flex items-center gap-2">
+                <CheckCircle className="h-4 w-4 text-primary" />
+                Status & Verification
+              </h3>
+              <p className="text-xs text-muted-foreground mt-1">Operational status and verification</p>
+            </div>
+            <CardContent className="p-6">
+              <div className="grid gap-6 sm:grid-cols-2">
+                <FormField
+                  control={form.control}
+                  name="enabled"
+                  render={({ field }) => (
+                    <FormItem className="flex flex-row items-center justify-between rounded-lg border p-3 shadow-sm">
+                      <div className="space-y-0.5">
+                        <FormLabel>Enabled</FormLabel>
+                        <FormDescription>Allow the charger to accept charging sessions</FormDescription>
+                      </div>
+                      <FormControl>
+                        <Switch checked={field.value} onCheckedChange={field.onChange} />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                <FormField
+                  control={form.control}
+                  name="verified"
+                  render={({ field }) => (
+                    <FormItem className="flex flex-row items-center justify-between rounded-lg border p-3 shadow-sm">
+                      <div className="space-y-0.5">
+                        <FormLabel>Verified</FormLabel>
+                        <FormDescription>Mark the charger as verified</FormDescription>
+                      </div>
+                      <FormControl>
+                        <Switch checked={field.value} onCheckedChange={field.onChange} />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Charger Type & Pricing */}
+          <Card className="overflow-hidden border-primary/10">
+            <div className="bg-gradient-to-r from-primary/5 to-primary/10 py-3 px-6 border-b border-primary/10">
+              <h3 className="font-medium flex items-center gap-2">
+                <DollarSign className="h-4 w-4 text-primary" />
+                Charger Type & Pricing
+              </h3>
+              <p className="text-xs text-muted-foreground mt-1">Type and price per kWh</p>
+            </div>
+            <CardContent className="p-6">
+              <div className="grid gap-6 sm:grid-cols-2">
+                <FormField
+                  control={form.control}
+                  name="type"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Charger Type</FormLabel>
+                      <Select onValueChange={field.onChange} value={field.value} defaultValue={field.value}>
+                        <FormControl>
+                          <SelectTrigger className="h-10">
+                            <SelectValue placeholder="Select charger type" />
+                          </SelectTrigger>
+                        </FormControl>
                         <SelectContent>
                           <SelectItem value="AC">AC</SelectItem>
                           <SelectItem value="DC">DC</SelectItem>
-                          <SelectItem value="BOTH">Both (AC/DC)</SelectItem>
+                          <SelectItem value="BOTH">Both</SelectItem>
                         </SelectContent>
                       </Select>
-                    )}
-                  />
-                  {errors.type && (
-                    <p className="text-sm text-destructive">{errors.type.message}</p>
+                      <FormMessage />
+                    </FormItem>
                   )}
-                </div>
-                
-                <div className="space-y-2">
-                  <Label htmlFor="price_per_kwh">Price per kWh (₹)</Label>
-                  <Input
-                    id="price_per_kwh"
-                    type="number"
-                    placeholder="e.g., 12.50"
-                    {...register('price_per_kwh')}
-                    className={errors.price_per_kwh ? 'border-destructive' : ''}
-                  />
-                  {errors.price_per_kwh && (
-                    <p className="text-sm text-destructive">{errors.price_per_kwh.message}</p>
+                />
+                <FormField
+                  control={form.control}
+                  name="price_per_kwh"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Price per kWh (₹)</FormLabel>
+                      <FormControl>
+                        <Input type="number" step="0.01" placeholder="10.00" {...field} />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
                   )}
-                </div>
+                />
               </div>
             </CardContent>
           </Card>
-          
-          <Card className="mb-8">
-            <CardHeader>
-              <CardTitle>Vendor Information</CardTitle>
-              <CardDescription>Manufacturer and model details</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <div className="grid gap-6 md:grid-cols-2">
-                <div className="space-y-2">
-                  <Label htmlFor="vendor">Vendor/Manufacturer</Label>
-                  <Input
-                    id="vendor"
-                    placeholder="e.g., ABB, Schneider, etc."
-                    {...register('vendor')}
-                  />
-                </div>
-                
-                <div className="space-y-2">
-                  <Label htmlFor="model">Model</Label>
-                  <Input
-                    id="model"
-                    placeholder="e.g., Terra AC, EVlink, etc."
-                    {...register('model')}
-                  />
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-          
-          <Card className="mb-8">
-            <CardHeader>
-              <CardTitle>Location Information</CardTitle>
-              <CardDescription>Geographic coordinates</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <div className="grid gap-6 md:grid-cols-2">
-                <div className="space-y-2">
-                  <Label htmlFor="longitude">Longitude</Label>
-                  <Controller
-                    control={control}
-                    name="coordinates.coordinates.0"
-                    render={({ field }) => (
-                      <Input
-                        id="longitude"
-                        type="number"
-                        step="0.000001"
-                        placeholder="e.g., 77.5946"
-                        value={field.value || ''}
-                        onChange={field.onChange}
-                      />
-                    )}
-                  />
-                </div>
-                
-                <div className="space-y-2">
-                  <Label htmlFor="latitude">Latitude</Label>
-                  <Controller
-                    control={control}
-                    name="coordinates.coordinates.1"
-                    render={({ field }) => (
-                      <Input
-                        id="latitude"
-                        type="number"
-                        step="0.000001"
-                        placeholder="e.g., 12.9716"
-                        value={field.value || ''}
-                        onChange={field.onChange}
-                      />
-                    )}
-                  />
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-          
-          <Card className="mb-8">
-            <CardHeader>
-              <CardTitle>Advanced Settings</CardTitle>
-              <CardDescription>Configuration options</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <div className="space-y-6">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <Label htmlFor="enabled" className="block">Enabled</Label>
-                    <p className="text-sm text-muted-foreground">Allow the charger to accept charging sessions</p>
-                  </div>
-                  <Controller
-                    control={control}
-                    name="enabled"
-                    render={({ field }) => (
-                      <Switch
-                        checked={field.value}
-                        onCheckedChange={field.onChange}
-                        id="enabled"
-                      />
-                    )}
-                  />
-                </div>
-                
-                <Separator />
-                
-                <div className="flex items-center justify-between">
-                  <div>
-                    <Label htmlFor="verified" className="block">Verified</Label>
-                    <p className="text-sm text-muted-foreground">Mark the charger as verified</p>
-                  </div>
-                  <Controller
-                    control={control}
-                    name="verified"
-                    render={({ field }) => (
-                      <Switch
-                        checked={field.value}
-                        onCheckedChange={field.onChange}
-                        id="verified"
-                      />
-                    )}
-                  />
-                </div>
-                
-                <Separator />
-                
-                <div className="space-y-2">
-                  <Label htmlFor="meter_value_interval">Meter Value Interval (seconds)</Label>
-                  <Input
-                    id="meter_value_interval"
-                    type="number"
-                    placeholder="e.g., 300"
-                    {...register('meter_value_interval')}
-                  />
-                  {errors.meter_value_interval && (
-                    <p className="text-sm text-destructive">{errors.meter_value_interval.message}</p>
+
+          {/* OCPI Information */}
+          <Card className="overflow-hidden border-primary/10">
+            <div className="bg-gradient-to-r from-primary/5 to-primary/10 py-3 px-6 border-b border-primary/10">
+              <h3 className="font-medium flex items-center gap-2">
+                <Shield className="h-4 w-4 text-primary" />
+                OCPI Information
+              </h3>
+              <p className="text-xs text-muted-foreground mt-1">Open Charge Point Interface settings</p>
+            </div>
+            <CardContent className="p-6">
+              <div className="grid gap-6 sm:grid-cols-2">
+                <FormField
+                  control={form.control}
+                  name="ocpi_id"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>OCPI ID</FormLabel>
+                      <FormControl>
+                        <Input placeholder="e.g., IND*CP001" {...field} />
+                      </FormControl>
+                      <FormDescription>Identifier for Open Charge Point Interface</FormDescription>
+                      <FormMessage />
+                    </FormItem>
                   )}
-                </div>
-                
-                <Separator />
-                
-                <div className="space-y-2">
-                  <Label htmlFor="ocpi_id">OCPI ID</Label>
-                  <Input
-                    id="ocpi_id"
-                    placeholder="e.g., IND*CP001"
-                    {...register('ocpi_id')}
-                  />
-                </div>
-                
-                <div className="flex items-center justify-between">
-                  <div>
-                    <Label htmlFor="publish_to_ocpi" className="block">Publish to OCPI</Label>
-                    <p className="text-sm text-muted-foreground">Make this charger visible in roaming networks</p>
-                  </div>
-                  <Controller
-                    control={control}
-                    name="publish_to_ocpi"
-                    render={({ field }) => (
-                      <Switch
-                        checked={field.value}
-                        onCheckedChange={field.onChange}
-                        id="publish_to_ocpi"
-                      />
-                    )}
-                  />
-                </div>
+                />
+                <FormField
+                  control={form.control}
+                  name="publish_to_ocpi"
+                  render={({ field }) => (
+                    <FormItem className="flex flex-row items-center justify-between rounded-lg border p-3 shadow-sm">
+                      <div className="space-y-0.5">
+                        <FormLabel>Publish to OCPI</FormLabel>
+                        <FormDescription>Make this charger visible in roaming networks</FormDescription>
+                      </div>
+                      <FormControl>
+                        <Switch checked={field.value} onCheckedChange={field.onChange} />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
               </div>
             </CardContent>
           </Card>
-          
-          <div className="flex justify-end space-x-4">
-            <Button variant="outline" type="button" onClick={() => navigate('/chargers')}>Cancel</Button>
-            <Button type="submit" disabled={isUpdating}>
-              {isUpdating ? (
-                <>
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  Updating...
-                </>
-              ) : (
-                'Update Charger'
-              )}
-            </Button>
-          </div>
-        </form>
-      )}
-    </PageLayout>
+
+          {/* Advanced Settings */}
+          <Card className="overflow-hidden border-primary/10">
+            <div className="bg-gradient-to-r from-primary/5 to-primary/10 py-3 px-6 border-b border-primary/10">
+              <h3 className="font-medium flex items-center gap-2">
+                <Settings className="h-4 w-4 text-primary" />
+                Advanced Settings
+              </h3>
+              <p className="text-xs text-muted-foreground mt-1">Metering and advanced configuration</p>
+            </div>
+            <CardContent className="p-6">
+              <div className="grid gap-6 sm:grid-cols-2">
+                <FormField
+                  control={form.control}
+                  name="meter_value_interval"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Meter Value Interval (seconds)</FormLabel>
+                      <FormControl>
+                        <Input type="number" placeholder="e.g., 300" {...field} />
+                      </FormControl>
+                      <FormDescription>Time between meter value updates in seconds</FormDescription>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+      </Form>
+    </EditTemplate>
   );
 };
 

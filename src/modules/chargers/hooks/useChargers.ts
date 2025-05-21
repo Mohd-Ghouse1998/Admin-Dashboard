@@ -63,15 +63,25 @@ export const useChargers = (searchQuery = '') => {
     queryFn: async () => {
       try {
         // If we have a search query, use the searchChargers method instead
-        if (searchQuery) {
-          return await chargerApi.searchChargers(accessToken, searchQuery);
+        let response;
+        if (searchQuery && searchQuery.trim() !== '') {
+          console.log('Executing search with query:', searchQuery);
+          response = await chargerApi.searchChargers(accessToken, searchQuery);
+        } else {
+          console.log('Fetching all chargers (no search query)');
+          response = await chargerApi.getChargers(accessToken);
         }
-        return await chargerApi.getChargers(accessToken);
+        
+        console.log('API response in useChargers:', response);
+        return response;
       } catch (err) {
         console.error('Error fetching chargers:', err);
         throw err;
       }
-    }
+    },
+    // These options are important for proper data handling
+    refetchOnWindowFocus: false,
+    staleTime: 30000  // 30 seconds
   });
 
   // Get a single charger - memoized to prevent infinite re-renders

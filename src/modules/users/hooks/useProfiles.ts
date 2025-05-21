@@ -36,8 +36,17 @@ export function useProfiles() {
           throw new Error(`Invalid profile ID: ${profileId}`);
         }
         
-        const response = await profileService.getProfile(numericId);
-        return response.data;
+        try {
+          const response = await profileService.getProfile(numericId);
+          console.log('Profile API response:', response); // Debug the actual response
+          
+          // Handle different response formats - API might return the profile directly
+          // or nested in a data property
+          return response;
+        } catch (error) {
+          console.error('Error in getProfile:', error);
+          throw error;
+        }
       },
       enabled: !!profileId && profileId !== "create" && !isNaN(Number(profileId)) // Skip fetching for invalid IDs
     });

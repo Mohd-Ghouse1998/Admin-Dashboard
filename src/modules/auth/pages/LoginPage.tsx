@@ -43,8 +43,8 @@ const LoginPage = () => {
         variant: "success"
       });
       
-      // Always redirect to dashboard after successful login
-      navigate('/dashboard', { replace: true });
+      // Always redirect to root (dashboard) after successful login
+      navigate('/', { replace: true });
     } catch (err: any) {
       // Extract error message using utility function
       const errorMessage = extractErrorMessage(err, "Login failed");

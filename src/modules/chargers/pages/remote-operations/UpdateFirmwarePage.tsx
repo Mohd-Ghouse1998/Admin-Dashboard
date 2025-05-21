@@ -4,8 +4,8 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { useQuery, useMutation } from '@tanstack/react-query';
 import { Helmet } from 'react-helmet-async';
-import { PageLayout } from '@/components/layout/PageLayout';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { CreateTemplate, CreateSectionHeader } from '@/components/templates/create/CreateTemplate';
+import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/components/ui/use-toast';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
@@ -113,52 +113,47 @@ const UpdateFirmwarePage = () => {
     updateFirmwareMutation.mutate(values);
   };
   
+  // Process errors
+  const errorMessage = chargersError ? 
+    (chargersError instanceof Error ? chargersError.message : 'Failed to load chargers') : null;
+    
   return (
-    <PageLayout
+    <CreateTemplate
       title="Update Charger Firmware"
       description="Schedule a firmware update for a charger"
+      icon={<UploadCloud className="h-5 w-5" />}
+      entityName="Firmware Update"
+      backPath="/chargers/remote-operations"
+      error={errorMessage}
+      isSubmitting={updateFirmwareMutation.isPending}
+      onSubmit={form.handleSubmit(onSubmit)}
     >
-      <Helmet>
-        <title>Update Charger Firmware | Electric Flow Admin</title>
-      </Helmet>
-      
-      {chargersError && (
-        <Alert variant="destructive" className="mb-4">
-          <AlertCircle className="h-4 w-4" />
-          <AlertTitle>Error</AlertTitle>
-          <AlertDescription>
-            {chargersError instanceof Error ? chargersError.message : 'Failed to load chargers'}
-          </AlertDescription>
-        </Alert>
-      )}
-      
-      <Card>
-        <CardHeader>
-          <CardTitle>Update Charger Firmware</CardTitle>
-          <CardDescription>
-            Schedule a firmware update for a charger. The update will be performed at the specified time.
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <Form {...form}>
-            <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <FormField
-                  control={form.control}
-                  name="chargerId"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Charger</FormLabel>
-                      <Select 
-                        onValueChange={(value) => {
-                          console.log('Charger selected:', value);
-                          setSelectedChargerId(value);
-                          field.onChange(value);
-                        }} 
-                        value={field.value}
-                      >
+      <Form {...form}>
+        <div className="space-y-6">
+          <div className="border rounded-md overflow-hidden">
+            <CreateSectionHeader 
+              title="Firmware Details" 
+              description="Specify the firmware source and update timing"
+              icon={<UploadCloud className="h-4 w-4" />}
+            />
+            <div className="p-6 space-y-6">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <FormField
+                control={form.control}
+                name="chargerId"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Charger</FormLabel>
+                    <Select 
+                      onValueChange={(value) => {
+                        console.log('Charger selected:', value);
+                        setSelectedChargerId(value);
+                        field.onChange(value);
+                      }} 
+                      value={field.value}
+                    >
                         <FormControl>
-                          <SelectTrigger>
+                          <SelectTrigger className="h-10 border-border hover:border-primary/20 focus:ring-1 focus:ring-primary/30 focus:border-primary/30">
                             <SelectValue placeholder="Select a charger" />
                           </SelectTrigger>
                         </FormControl>
@@ -212,6 +207,7 @@ const UpdateFirmwarePage = () => {
                       <FormControl>
                         <Input 
                           type="datetime-local" 
+                          className="h-10 border-border hover:border-primary/20 focus:ring-1 focus:ring-primary/30 focus:border-primary/30" 
                           {...field} 
                         />
                       </FormControl>
@@ -234,30 +230,11 @@ const UpdateFirmwarePage = () => {
                 </div>
               </div>
               
-              <div className="flex justify-end">
-                <Button 
-                  type="submit" 
-                  disabled={updateFirmwareMutation.isPending}
-                  className="ml-auto"
-                >
-                  {updateFirmwareMutation.isPending ? (
-                    <>
-                      <div className="mr-2 h-4 w-4 animate-spin rounded-full border-2 border-background border-t-transparent"></div>
-                      Scheduling...
-                    </>
-                  ) : (
-                    <>
-                      <UploadCloud className="mr-2 h-4 w-4" />
-                      Schedule Update
-                    </>
-                  )}
-                </Button>
-              </div>
-            </form>
-          </Form>
-        </CardContent>
-      </Card>
-    </PageLayout>
+            </div>
+          </div>
+        </div>
+      </Form>
+    </CreateTemplate>
   );
 };
 

@@ -1,58 +1,46 @@
 import React, { useState } from 'react';
 import { Helmet } from 'react-helmet-async';
 import { Link, useNavigate } from 'react-router-dom';
-import { PageLayout } from '@/components/layout/PageLayout';
-import { DataTable } from '@/components/ui/data-table';
+import { useAuth } from '@/hooks/useAuth';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { chargerApi } from '@/modules/chargers/services/chargerService';
+
+// UI Components
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
+import { Card, CardContent } from '@/components/ui/card';
+import { useToast } from '@/hooks/use-toast';
 import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from '@/components/ui/table';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { useToast } from '@/components/ui/use-toast';
-import { 
-  AlertCircle, 
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
+import { ListTemplate, Column } from '@/components/templates/list/ListTemplate';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+
+// Icons
+import {
   Tag, 
-  Plus, 
-  Search, 
-  Lock, 
+  User,
+  GitBranch,
+  Calendar,
+  Lock,
   CheckCircle2, 
   XCircle, 
   Clock,
-  Calendar,
-  User,
-  GitBranch, // Using GitBranch instead of ParentChild which doesn't exist
-  MoreHorizontal
+  Edit,
+  Download,
+  Trash2,
+  FilterIcon,
+  TrendingUp
 } from 'lucide-react';
-// Using type any for ColumnDef since we may have issues with @tanstack/react-table types
-type ColumnDef<T> = any;
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { chargerApi } from '@/modules/chargers/services/chargerService';
-import { useAuth } from '@/hooks/useAuth';
-import { format } from 'date-fns';
-import { Input } from '@/components/ui/input';
-import { 
-  Select, 
-  SelectContent, 
-  SelectItem, 
-  SelectTrigger, 
-  SelectValue 
-} from '@/components/ui/select';
-import { 
-  DropdownMenu, 
-  DropdownMenuContent, 
-  DropdownMenuItem, 
-  DropdownMenuTrigger 
-} from '@/components/ui/dropdown-menu';
-import { Switch } from '@/components/ui/switch';
-import { Label } from '@/components/ui/label';
 
-// Define IDTag interface based on the API response
+// Define ID Tag interface based on the API response
 interface IDTag {
   id: number;
   idtag: string;
@@ -61,26 +49,36 @@ interface IDTag {
   is_blocked: boolean;
   expiry_date?: string | null;
   is_expired: boolean;
+  created_at?: string;
 }
 
 const IdTagsListPage = () => {
   const navigate = useNavigate();
   const { toast } = useToast();
   const queryClient = useQueryClient();
+  
+  // State variables
   const [searchQuery, setSearchQuery] = useState('');
+  const [currentPage, setCurrentPage] = useState(1);
+  const [pageSize, setPageSize] = useState(10);
   const [filterBlocked, setFilterBlocked] = useState<boolean | undefined>(undefined);
   const [filterExpired, setFilterExpired] = useState<boolean | undefined>(undefined);
+  const [selectedIdTagIds, setSelectedIdTagIds] = useState<(string | number)[]>([]);
+  const [isMultiDeleteDialogOpen, setIsMultiDeleteDialogOpen] = useState(false);
   
-  // Fetch id tags with filters
+  // Fetch ID tags with filters
   const { accessToken } = useAuth();
   const { data, isLoading, error } = useQuery({
-    queryKey: ['idTags', searchQuery, filterBlocked, filterExpired],
+    queryKey: ['idTags', searchQuery, filterBlocked, filterExpired, currentPage, pageSize],
     queryFn: async () => {
       try {
         console.log('Fetching ID tags with accessToken:', accessToken ? 'Yes (token present)' : 'No token');
         
         // Build filters object
-        const filters: Record<string, any> = {};
+        const filters: Record<string, any> = {
+          page: currentPage,
+          page_size: pageSize
+        };
         
         if (searchQuery) {
           filters.search = searchQuery;
@@ -143,373 +141,220 @@ const IdTagsListPage = () => {
       deleteMutation.mutate(id);
     }
   };
+
+  // Function to format date in a readable way
+  const formatDate = (dateString: string | undefined) => {
+    if (!dateString) return 'N/A';
+    const date = new Date(dateString);
+    return date.toLocaleDateString('en-US', { 
+      year: 'numeric', 
+      month: 'short', 
+      day: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit'
+    });
+  };
   
-  // Define columns for the data table
-  const columns: ColumnDef<IDTag>[] = [
+  // Process data from API
+  const idTags = (data?.results || []) as IDTag[];
+  const totalItems = data?.count || 0;
+  const totalPages = Math.ceil(totalItems / pageSize);
+  
+  // Filter component
+  const filterComponent = (
+    <div className="flex gap-2">
+      <select
+        value={filterBlocked === undefined ? 'all' : filterBlocked ? 'true' : 'false'}
+        onChange={(e) => {
+          const value = e.target.value;
+          if (value === 'all') {
+            setFilterBlocked(undefined);
+          } else {
+            setFilterBlocked(value === 'true');
+          }
+          setCurrentPage(1);
+        }}
+        className="h-9 rounded-md border border-input bg-transparent px-3 text-sm ring-offset-background"
+      >
+        <option value="all">All Statuses</option>
+        <option value="true">Blocked</option>
+        <option value="false">Active</option>
+      </select>
+
+      <select
+        value={filterExpired === undefined ? 'all' : filterExpired ? 'true' : 'false'}
+        onChange={(e) => {
+          const value = e.target.value;
+          if (value === 'all') {
+            setFilterExpired(undefined);
+          } else {
+            setFilterExpired(value === 'true');
+          }
+          setCurrentPage(1);
+        }}
+        className="h-9 rounded-md border border-input bg-transparent px-3 text-sm ring-offset-background"
+      >
+        <option value="all">All Expiries</option>
+        <option value="true">Expired</option>
+        <option value="false">Valid</option>
+      </select>
+    </div>
+  );
+  
+  // Define columns for the ListTemplate
+  const columns: Column<IDTag>[] = [
     {
-      accessorKey: 'idtag',
-      header: 'ID Tag',
-      cell: ({ row }) => {
-        if (!row?.original) return null;
-        return (
-          <div className="flex items-center gap-2">
-            <Tag className="h-4 w-4" />
-            <Link 
-              to={`/chargers/id-tags/${row.original.id}`}
-              className="font-medium text-primary hover:underline"
-            >
-              {row.original.idtag}
-            </Link>
-          </div>
-        );
-      },
+      header: "ID Tag",
+      key: "idtag",
+      render: (idTag) => idTag.idtag,
+      width: "20%"
     },
     {
-      accessorKey: 'user',
-      header: 'User',
-      cell: ({ row }) => {
-        if (!row?.original) return null;
-        return (
-          <div className="flex items-center gap-2">
-            <User className="h-4 w-4" />
-            {row.original.user ? (
-              <Link 
-                to={`/users/${row.original.user}`}
-                className="text-sm hover:underline"
-              >
-                User {row.original.user}
-              </Link>
-            ) : (
-              <span className="text-sm text-muted-foreground">Not assigned</span>
-            )}
-          </div>
-        );
-      },
+      header: "User",
+      key: "user",
+      render: (idTag) => idTag.user ? `User ${idTag.user}` : '-',
+      width: "15%"
     },
     {
-      accessorKey: 'parent_idtag',
-      header: 'Parent ID Tag',
-      cell: ({ row }) => {
-        if (!row?.original) return null;
-        return (
-          <div className="flex items-center gap-2">
-            <GitBranch className="h-4 w-4" />
-            {row.original.parent_idtag ? (
-              <span className="text-sm">{row.original.parent_idtag}</span>
-            ) : (
-              <span className="text-sm text-muted-foreground">None</span>
-            )}
-          </div>
-        );
-      },
+      header: "Parent ID Tag",
+      key: "parent_idtag",
+      render: (idTag) => idTag.parent_idtag || '-',
+      width: "15%"
     },
     {
-      accessorKey: 'is_blocked',
-      header: 'Status',
-      cell: ({ row }) => {
-        if (!row?.original) return null;
-        return (
-          <div className="flex items-center gap-2">
-            {row.original.is_blocked ? (
-              <>
-                <Lock className="h-4 w-4 text-destructive" />
-                <Badge variant="destructive">Blocked</Badge>
-              </>
-            ) : (
-              <>
-                <CheckCircle2 className="h-4 w-4 text-green-500" />
-                <Badge variant="outline" className="text-green-500 border-green-200 bg-green-50">
-                  Active
-                </Badge>
-              </>
-            )}
-          </div>
-        );
-      },
+      header: "Expiry Date",
+      key: "expiry_date",
+      render: (idTag) => idTag.expiry_date ? formatDate(idTag.expiry_date) : 'No expiry',
+      width: "20%"
     },
     {
-      accessorKey: 'expiry_date',
-      header: 'Expiry Date',
-      cell: ({ row }) => {
-        if (!row?.original) return null;
+      header: "Status",
+      key: "is_blocked",
+      render: (idTag) => {
+        const isBlocked = idTag.is_blocked;
+        const isExpired = idTag.is_expired;
+        
+        let status = 'Active';
+        let bgColor = 'bg-green-100 text-green-800';
+        
+        if (isBlocked) {
+          status = 'Blocked';
+          bgColor = 'bg-red-100 text-red-800';
+        } else if (isExpired) {
+          status = 'Expired';
+          bgColor = 'bg-yellow-100 text-yellow-800';
+        }
+        
         return (
-          <div className="flex items-center gap-2">
-            <Calendar className="h-4 w-4" />
-            {row.original.expiry_date ? (
-              <span className="text-sm">
-                {format(new Date(row.original.expiry_date), 'dd MMM yyyy, HH:mm')}
-              </span>
-            ) : (
-              <span className="text-sm text-muted-foreground">No expiry</span>
-            )}
-          </div>
+          <span className={`px-2 py-1 rounded-md text-xs font-medium ${bgColor}`}>{status}</span>
         );
       },
-    },
-    {
-      accessorKey: 'is_expired',
-      header: 'Expiry Status',
-      cell: ({ row }) => {
-        if (!row?.original) return null;
-        return (
-          <div className="flex items-center gap-2">
-            {row.original.is_expired ? (
-              <>
-                <XCircle className="h-4 w-4 text-destructive" />
-                <Badge variant="destructive">Expired</Badge>
-              </>
-            ) : (
-              <>
-                <Clock className="h-4 w-4 text-green-500" />
-                <Badge variant="outline" className="text-green-500 border-green-200 bg-green-50">
-                  Valid
-                </Badge>
-              </>
-            )}
-          </div>
-        );
-      },
-    },
-    {
-      id: 'actions',
-      header: 'Actions',
-      cell: ({ row }) => {
-        if (!row?.original) return null;
-        return (
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button variant="ghost" className="h-8 w-8 p-0">
-                <span className="sr-only">Open menu</span>
-                <MoreHorizontal className="h-4 w-4" />
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end">
-              <DropdownMenuItem asChild>
-                <Link to={`/chargers/id-tags/${row.original.id}`}>
-                  View
-                </Link>
-              </DropdownMenuItem>
-              <DropdownMenuItem asChild>
-                <Link to={`/chargers/id-tags/${row.original.id}/edit`}>
-                  Edit
-                </Link>
-              </DropdownMenuItem>
-              <DropdownMenuItem 
-                onClick={() => handleDelete(row.original.id)}
-                className="text-destructive"
-              >
-                Delete
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
-        );
-      },
-    },
+      width: "15%"
+    }
   ];
-  
-  // Add debugging for data coming from the API
-  console.log('Raw data from API:', data);
-  
-  // Ensure we're handling the pagination data correctly
-  const processedData = data?.results || [];
-  console.log('Processed data for table:', processedData);
-  
-  const [pageSize, setPageSize] = useState<number>(10);
-  const [currentPage, setCurrentPage] = useState<number>(1);
-  
-  // Create pagination object for the DataTable
-  const pagination = data 
-    ? {
-        currentPage: currentPage,
-        totalPages: Math.ceil(data.count / pageSize),
-        totalItems: data.count,
-        pageSize: pageSize,
-        onPageChange: (page: number) => setCurrentPage(page),
-        onPageSizeChange: (newPageSize: number) => setPageSize(newPageSize),
-        pageSizeOptions: [10, 20, 30, 50]
-      }
-    : {
-        currentPage: 1,
-        totalPages: 0,
-        totalItems: 0,
-        pageSize: 10,
-        onPageChange: (page: number) => setCurrentPage(page),
-        onPageSizeChange: (newPageSize: number) => setPageSize(newPageSize),
-        pageSizeOptions: [10, 20, 30, 50]
-      };
-  
-  // Log pagination configuration
-  console.log('Pagination config:', pagination);
-  
+
+  const handleIdTagSelection = (selectedTags: IDTag[]) => {
+    setSelectedIdTagIds(selectedTags.map(tag => tag.id));
+  };
+
   return (
-    <PageLayout
-      title="ID Tags Management"
-      description="Manage RFID cards and authentication tags for chargers"
-      actions={
-        <Button asChild>
-          <Link to="/chargers/id-tags/create">
-            <Plus className="mr-2 h-4 w-4" /> Create ID Tag
-          </Link>
-        </Button>
-      }
-    >
+    <>
       <Helmet>
-        <title>ID Tags Management | Electric Flow Admin Portal</title>
+        <title>ID Tags Management | EV Admin</title>
       </Helmet>
       
-      <Card className="mb-6">
-        <CardHeader>
-          <CardTitle className="text-lg">Filters</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-            <div>
-              <Label htmlFor="search">Search</Label>
-              <div className="relative mt-1">
-                <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
-                <Input
-                  id="search"
-                  placeholder="Search by ID Tag"
-                  className="pl-8"
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                />
-              </div>
-            </div>
-            
-            <div>
-              <Label htmlFor="blocked-status">Blocked Status</Label>
-              <Select
-                value={filterBlocked?.toString() || 'all'}
-                onValueChange={(value) => 
-                  setFilterBlocked(value === 'all' ? undefined : value === 'true')
-                }
-              >
-                <SelectTrigger id="blocked-status" className="mt-1">
-                  <SelectValue placeholder="Filter by blocked status" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">All</SelectItem>
-                  <SelectItem value="true">Blocked</SelectItem>
-                  <SelectItem value="false">Active</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            
-            <div>
-              <Label htmlFor="expired-status">Expiry Status</Label>
-              <Select
-                value={filterExpired?.toString() || 'all'}
-                onValueChange={(value) => 
-                  setFilterExpired(value === 'all' ? undefined : value === 'true')
-                }
-              >
-                <SelectTrigger id="expired-status" className="mt-1">
-                  <SelectValue placeholder="Filter by expiry status" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">All</SelectItem>
-                  <SelectItem value="true">Expired</SelectItem>
-                  <SelectItem value="false">Valid</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
+      <ListTemplate
+        title="ID Tags Management"
+        description="Manage RFID cards and authentication tags for chargers"
+        icon={<Tag className="h-5 w-5 text-primary" />}
+        data={idTags}
+        isLoading={isLoading}
+        error={error ? "Failed to load ID tags data" : null}
+        columns={columns}
+        onRowClick={(idTag) => navigate(`/chargers/id-tags/${idTag.id}`)}
+        createPath="/chargers/id-tags/create"
+        createButtonText="Add ID Tag"
+        searchQuery={searchQuery}
+        onSearchChange={setSearchQuery}
+        searchPlaceholder="Search ID tags..."
+        filterComponent={filterComponent}
+        currentPage={currentPage}
+        totalPages={totalPages}
+        totalItems={totalItems}
+        pageSize={pageSize}
+        onPageChange={setCurrentPage}
+        selectable={true}
+        selectedItems={idTags.filter(tag => selectedIdTagIds.includes(tag.id))}
+        onSelectItems={handleIdTagSelection}
+        className="shadow-md border border-gray-100 rounded-lg overflow-hidden"
+        tableClassName="[&_tr:hover]:bg-gray-50/80 [&_th]:bg-gray-50/70 [&_th]:text-gray-600 [&_th]:font-medium"
+        actionBarClassName="border-b border-gray-100 bg-gray-50/40"
+      />
       
-      {error ? (
-        <Card className="border-destructive">
-          <CardContent className="pt-6">
-            <div className="flex items-center gap-3">
-              <AlertCircle className="h-6 w-6 text-destructive" />
-              <div>
-                <h3 className="font-semibold">Error loading ID tags</h3>
-                <p className="text-sm text-muted-foreground">
-                  There was a problem loading the ID tags. Please try again.
-                </p>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-      ) : isLoading ? (
-        <Card>
-          <CardContent className="p-8">
-            <div className="flex items-center justify-center">
-              <div className="h-8 w-8 animate-spin rounded-full border-2 border-primary border-t-transparent"></div>
-              <span className="ml-2">Loading ID Tags...</span>
-            </div>
-          </CardContent>
-        </Card>
-      ) : processedData.length === 0 ? (
-        <Card>
-          <CardContent className="py-10">
-            <div className="flex flex-col items-center justify-center text-center">
-              <Tag className="mb-2 h-10 w-10 text-muted-foreground" />
-              <h3 className="mb-1 text-lg font-semibold">No ID Tags Found</h3>
-              <p className="text-sm text-muted-foreground">
-                No ID tags match your search criteria
-              </p>
-            </div>
-          </CardContent>
-        </Card>
-      ) : (
-        <div className="rounded-md border">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                {columns.map((column, index) => (
-                  <TableHead key={`header-${index}`}>
-                    {column.header}
-                  </TableHead>
-                ))}
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {processedData.map((row, rowIndex) => (
-                <TableRow key={`row-${row.id || rowIndex}`}>
-                  {columns.map((column, colIndex) => {
-                    return (
-                      <TableCell key={`cell-${rowIndex}-${colIndex}`}>
-                        {column.cell ? column.cell({ row: { original: row } }) : row[column.accessorKey]}
-                      </TableCell>
-                    );
-                  })}
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-          
-          {/* Simple pagination UI */}
-          <div className="flex items-center justify-between px-4 py-4">
-            <div className="text-sm text-muted-foreground">
-              Showing {processedData.length} of {data?.count || 0} ID Tags
-            </div>
-            <div className="flex items-center space-x-2">
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => setCurrentPage(Math.max(1, currentPage - 1))}
-                disabled={currentPage <= 1}
-              >
-                Previous
-              </Button>
-              <div className="text-sm">
-                Page {currentPage} of {pagination.totalPages}
-              </div>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => setCurrentPage(Math.min(pagination.totalPages, currentPage + 1))}
-                disabled={currentPage >= pagination.totalPages}
-              >
-                Next
-              </Button>
-            </div>
+      {/* Bulk action toolbar */}
+      {selectedIdTagIds.length > 0 && (
+        <div className="fixed bottom-6 left-1/2 transform -translate-x-1/2 z-50 
+                      bg-gradient-to-r from-primary to-indigo-600 text-white 
+                      py-3 px-5 rounded-full shadow-xl flex items-center gap-4 
+                      transition-all duration-300 ease-in-out">
+          <span className="font-medium">{selectedIdTagIds.length} items selected</span>
+          <div className="h-5 w-px bg-white/20"></div>
+          <div className="flex items-center gap-2">
+            <Button size="sm" variant="secondary" className="h-8 bg-white/10 hover:bg-white/20 text-white border-none">
+              <Edit className="h-3.5 w-3.5 mr-1" /> Edit
+            </Button>
+            <Button size="sm" variant="secondary" className="h-8 bg-white/10 hover:bg-white/20 text-white border-none">
+              <Download className="h-3.5 w-3.5 mr-1" /> Export
+            </Button>
+            <Button size="sm" variant="destructive" className="h-8" onClick={() => setIsMultiDeleteDialogOpen(true)}>
+              <Trash2 className="h-3.5 w-3.5 mr-1" /> Delete
+            </Button>
           </div>
         </div>
       )}
-    </PageLayout>
+          
+      {/* Multi-delete confirmation dialog */}
+      <AlertDialog open={isMultiDeleteDialogOpen} onOpenChange={setIsMultiDeleteDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete multiple ID tags?</AlertDialogTitle>
+            <AlertDialogDescription>
+              You are about to delete {selectedIdTagIds.length} ID tags. This action will permanently remove all selected tags.
+              This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction 
+              onClick={() => {
+                // Implementation for multi-delete
+                Promise.all(selectedIdTagIds.map(id => deleteMutation.mutateAsync(Number(id))))
+                  .then(() => {
+                    toast({
+                      title: "ID Tags deleted",
+                      description: `${selectedIdTagIds.length} ID tags have been successfully deleted.`,
+                    });
+                    setSelectedIdTagIds([]);
+                  })
+                  .catch(() => {
+                    toast({
+                      title: "Error",
+                      description: "Failed to delete ID tags. Please try again.",
+                      variant: "destructive",
+                    });
+                  })
+                  .finally(() => {
+                    setIsMultiDeleteDialogOpen(false);
+                  });
+              }}
+              className="bg-red-600 hover:bg-red-700"
+            >
+              Delete {selectedIdTagIds.length} ID Tags
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+    </>
   );
 };
 

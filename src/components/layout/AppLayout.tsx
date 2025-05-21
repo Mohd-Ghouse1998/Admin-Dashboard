@@ -1,16 +1,19 @@
+/**
+ * Main application layout component with modern sidebar navigation.
+ */
 
 import { Outlet } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
 import ProtectedRoute from "@/components/auth/ProtectedRoute";
-import { Button } from "@/components/ui/button";
-import { Menu, X } from "lucide-react";
 import { useState, useEffect } from "react";
 import { useToast } from "@/hooks/use-toast";
-import { SideNav } from "@/components/layout/Sidebar/SideNav";
+import { ModernSideNav } from "@/components/layout/Sidebar/ModernSideNav";
 import { useIsMobile } from "@/hooks/use-mobile";
 import Header from "@/components/layout/Header";
 import { cn } from "@/lib/utils";
 import { navigationConfig } from "./navigationConfig";
+import { ThemeProvider } from "@/components/ui/theme-provider";
+import { OCPIRoleProvider } from "@/modules/ocpi/contexts/OCPIRoleContext";
 
 const AppLayout = () => {
   const { isAuthenticated, user } = useAuth();
@@ -50,60 +53,53 @@ const AppLayout = () => {
 
   return (
     <ProtectedRoute>
-      <div className="min-h-screen flex bg-gray-50 dark:bg-gray-900">
-        {/* Mobile overlay */}
-        {mobileOverlayVisible && (
-          <div 
-            className="fixed inset-0 bg-black/50 backdrop-blur-sm z-30 lg:hidden"
-            onClick={() => {
-              setSidebarOpen(false);
-              setMobileOverlayVisible(false);
-            }}
-          />
-        )}
+      <ThemeProvider defaultTheme="light" storageKey="ev-admin-theme">
+        <OCPIRoleProvider>
+          <div className="min-h-screen flex bg-gray-50 dark:bg-gray-900">
+            {/* Mobile overlay */}
+            {mobileOverlayVisible && (
+              <div 
+                className="fixed inset-0 bg-black/50 backdrop-blur-sm z-20 lg:hidden"
+                onClick={() => {
+                  setSidebarOpen(false);
+                  setMobileOverlayVisible(false);
+                }}
+              />
+            )}
 
-        {/* Sidebar */}
-        <SideNav 
-          open={sidebarOpen}
-          navigationConfig={navigationConfig}
-          userRole={user?.role || "user"}
-          setOpen={(open) => {
-            setSidebarOpen(open);
-            setMobileOverlayVisible(open && isMobile);
-            localStorage.setItem("sidebar-open", String(open));
-          }} 
-        />
+            {/* Modern Sidebar */}
+            <ModernSideNav 
+              open={sidebarOpen}
+              navigationConfig={navigationConfig}
+              userRole={user?.role || "user"}
+              setOpen={(open) => {
+                setSidebarOpen(open);
+                setMobileOverlayVisible(open && isMobile);
+                localStorage.setItem("sidebar-open", String(open));
+              }} 
+            />
 
-        {/* Main content area with proper margin for sidebar */}
-        <div className={cn(
-          "flex-1 flex flex-col min-w-0",
-          sidebarOpen ? "lg:ml-64" : "lg:ml-[70px]"
-        )}>
-          {/* Header */}
-          <Header />
+            {/* Main content area with proper margin for sidebar */}
+            <div className={cn(
+              "flex-1 flex flex-col min-w-0 transition-all duration-300",
+              sidebarOpen ? "lg:ml-[280px]" : "lg:ml-[80px]"
+            )}>
+              {/* Header */}
+              <Header 
+                toggleSidebar={toggleSidebar}
+                isMobile={true}
+              />
 
-          {/* Mobile header */}
-          <div className="lg:hidden flex items-center h-16 bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 px-4">
-            <Button
-              variant="ghost"
-              size="icon"
-              onClick={toggleSidebar}
-              className="mr-4"
-              aria-label={sidebarOpen ? "Close sidebar" : "Open sidebar"}
-            >
-              {sidebarOpen ? <X className="h-6 w-6" /> : <Menu className="h-6 w-6" />}
-            </Button>
-            <h1 className="text-xl font-semibold text-gray-900 dark:text-white">Dashboard</h1>
-          </div>
-
-          {/* Main content */}
-          <main className="flex-1 overflow-y-auto">
-            <div className="py-6 px-4 sm:px-6 lg:px-8">
-              <Outlet />
+              {/* Main content */}
+              <main className="flex-1 overflow-y-auto">
+                <div className="py-6 px-4 sm:px-6 lg:px-8 max-w-screen-2xl mx-auto">
+                  <Outlet />
+                </div>
+              </main>
             </div>
-          </main>
-        </div>
-      </div>
+          </div>
+        </OCPIRoleProvider>
+      </ThemeProvider>
     </ProtectedRoute>
   );
 };

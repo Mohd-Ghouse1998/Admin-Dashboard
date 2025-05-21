@@ -91,9 +91,9 @@ export const navigationConfig: NavSection[] = [
     icon: LayoutDashboard,
     items: [
       {
-        name: "Dashboard Overview",
+        name: "Dashboard",
         href: "/",
-        icon: BarChart3,
+        icon: LayoutDashboard,
       },
     ],
   },
@@ -161,6 +161,7 @@ export const navigationConfig: NavSection[] = [
       },
     ],
   },
+  
   
   // Tenant Management
   {
@@ -358,10 +359,10 @@ export const navigationConfig: NavSection[] = [
     ],
   },
   
-  // Payment & Billing
+  // Payments & Billing
   {
-    id: "payments",
-    name: "Payment & Billing",
+    id: "payments-billing",
+    name: "Payments & Billing",
     icon: CreditCard,
     items: [
       {

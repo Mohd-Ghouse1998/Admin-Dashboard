@@ -1,9 +1,5 @@
-
-import React, { useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { Helmet } from 'react-helmet-async';
-import { PageLayout } from '@/components/layout/PageLayout';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/hooks/use-toast';
 import { useUser } from '@/modules/users/hooks/useUser';
@@ -20,7 +16,10 @@ import {
   FormDescription,
 } from '@/components/ui/form';
 import { Input } from '@/components/ui/input';
-import { Separator } from '@/components/ui/separator';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
+import { Badge } from '@/components/ui/badge';
+import { Switch } from '@/components/ui/switch';
+import { Skeleton } from '@/components/ui/skeleton';
 import {
   Select,
   SelectContent,
@@ -28,15 +27,20 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
+import { 
+  User, Mail, Phone, Building, MapPin, Globe, Lock, Check,
+  ArrowLeft, Save, X, CheckCircle, AlertTriangle, Loader2, Shield
+} from 'lucide-react';
+import { UserUpdatePayload, User as UserInterface } from '@/types/user';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
-import { AlertCircle, Loader2 } from 'lucide-react';
-import { UserUpdatePayload } from '@/types/user';
+import { EditTemplate } from '@/components/templates/edit/EditTemplate';
 
 // Define schema based on the field mappings for Edit Form
 const userEditSchema = z.object({
   email: z.string().email('Invalid email address'),
   first_name: z.string().optional(),
   last_name: z.string().optional(),
+  is_active: z.boolean().optional(),
   profile: z.object({
     phone_number: z.string().optional(),
     city: z.string().optional(),
@@ -56,9 +60,10 @@ const UserEditPage: React.FC = () => {
   const navigate = useNavigate();
   const { toast } = useToast();
   const { getUser, updateUser } = useUser();
-
-  const userId = id as string;
-  const { data: user, isLoading, error } = getUser(userId);
+  const [formError, setFormError] = useState<string | null>(null);
+  
+  // Fetch user data
+  const { data: userData, isLoading, error } = getUser(id as string);
 
   // Initialize form with empty values
   const form = useForm<UserEditForm>({
@@ -67,6 +72,7 @@ const UserEditPage: React.FC = () => {
       email: '',
       first_name: '',
       last_name: '',
+      is_active: true,
       profile: {
         phone_number: '',
         city: '',
@@ -79,149 +85,203 @@ const UserEditPage: React.FC = () => {
       },
     },
   });
-
-  // Set form values when user data is loaded
+  
+  // Update form values when user data is loaded
   useEffect(() => {
-    if (user) {
+    if (userData) {
+      // Ensure we're working with the right types
+      const userDataTyped = userData as any;
       form.reset({
-        email: user.email,
-        first_name: user.first_name || '',
-        last_name: user.last_name || '',
+        email: userDataTyped.email || '',
+        first_name: userDataTyped.first_name || '',
+        last_name: userDataTyped.last_name || '',
+        is_active: userDataTyped.is_active || false,
         profile: {
-          phone_number: user.profile?.phone_number || '',
-          city: user.profile?.city || '',
-          state: user.profile?.state || '',
-          pin: user.profile?.pin || '',
-          address: user.profile?.address || '',
-          ocpi_party_id: user.profile?.ocpi_party_id || '',
-          ocpi_role: user.profile?.ocpi_role as 'CPO' | 'eMSP' | undefined,
-          ocpi_token: user.profile?.ocpi_token || '',
+          phone_number: userDataTyped.profile?.phone_number || '',
+          city: userDataTyped.profile?.city || '',
+          state: userDataTyped.profile?.state || '',
+          pin: userDataTyped.profile?.pin || '',
+          address: userDataTyped.profile?.address || '',
+          ocpi_party_id: userDataTyped.profile?.ocpi_party_id || '',
+          ocpi_role: userDataTyped.profile?.ocpi_role as 'CPO' | 'eMSP' || undefined,
+          ocpi_token: userDataTyped.profile?.ocpi_token || '',
         },
       });
     }
-  }, [user, form]);
+  }, [userData, form]);
 
   // Submit handler
   const onSubmit = async (data: UserEditForm) => {
     try {
-      // Create a properly typed update payload with the required id field
-      const updatePayload: UserUpdatePayload = {
-        id: userId, // Required for updates
+      setFormError(null);
+      
+      if (!id) {
+        throw new Error('User ID is missing');
+      }
+      
+      // Prepare update payload
+      const userPayload: UserUpdatePayload = {
+        id: id, // Include the ID as required by the UserUpdatePayload type
         email: data.email,
+        is_active: data.is_active,
         first_name: data.first_name,
         last_name: data.last_name,
-        profile: data.profile
+        profile: data.profile,
       };
       
-      await updateUser({
-        id: userId,
-        userData: updatePayload
+      // Call the update API - convert string ID to number as required by the API
+      const numericId = Number(id);
+      if (isNaN(numericId)) {
+        throw new Error(`Invalid user ID: ${id}`);
+      }
+      
+      // Pass the userData as a partial User object matching the User interface from userService
+      const result = await updateUser.mutateAsync({ 
+        userId: numericId, 
+        userData: {
+          email: data.email,
+          // is_active is not in the User type but is included in UserCreatePayload/UserUpdatePayload
+          // first_name and last_name are from the form
+          first_name: data.first_name || '',
+          last_name: data.last_name || '',
+          // Ensure profile matches the UserProfile interface
+          profile: data.profile ? {
+            phone_number: data.profile.phone_number,
+            city: data.profile.city,
+            state: data.profile.state,
+            pin: data.profile.pin,
+            address: data.profile.address,
+            ocpi_party_id: data.profile.ocpi_party_id,
+            ocpi_role: data.profile.ocpi_role,
+            ocpi_token: data.profile.ocpi_token,
+            // Required fields
+            is_phone_verified: userData?.profile?.is_phone_verified || false,
+            is_email_verified: userData?.profile?.is_email_verified || false,
+          } : null
+        } 
       });
       
-      toast({
-        title: 'Success',
-        description: 'User updated successfully',
-      });
+      if (result) {
+        toast({
+          title: "User Updated",
+          description: "User account has been updated successfully",
+        });
+        
+        // Navigate back to the user detail page
+        navigate(`/users/${id}`);
+      }
+    } catch (err) {
+      console.error("Failed to update user:", err);
+      setFormError(err instanceof Error ? err.message : String(err));
       
-      navigate(`/users/${userId}`);
-    } catch (error) {
-      console.error('Error updating user:', error);
-      
       toast({
-        title: 'Error',
-        description: error instanceof Error ? error.message : 'Failed to update user',
-        variant: 'destructive',
+        title: "Update Failed",
+        description: err instanceof Error ? err.message : "An error occurred while updating the user",
+        variant: "destructive",
       });
     }
   };
 
+  // Render loading state
   if (isLoading) {
     return (
-      <PageLayout
-        title="Edit User"
-        description="Update user information"
-        backButton
-        backTo={`/users/${userId}`}
+      <EditTemplate
+        title="Loading User..."
+        subtitle={`User ID: ${id}`}
+        description="Loading user information"
+        icon={<User className="h-5 w-5" />}
+        backPath="/users"
+        isLoading={true}
+        className="max-w-full container-fluid px-6"
       >
-        <Helmet>
-          <title>Edit User | Admin Dashboard</title>
-        </Helmet>
-        <div className="flex justify-center items-center py-12">
-          <Loader2 className="h-8 w-8 animate-spin text-primary" />
+        <div className="space-y-6">
+          <Card>
+            <CardHeader className="pb-3">
+              <Skeleton className="h-6 w-48" />
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-4">
+                <Skeleton className="h-10 w-full" />
+                <Skeleton className="h-10 w-full" />
+                <Skeleton className="h-10 w-full" />
+              </div>
+            </CardContent>
+          </Card>
         </div>
-      </PageLayout>
+      </EditTemplate>
     );
   }
 
+  // Render error state
   if (error) {
     return (
-      <PageLayout
-        title="Edit User"
-        description="Update user information"
-        backButton
-        backTo={`/users/${userId}`}
+      <EditTemplate
+        title="Error Loading User"
+        subtitle={`User ID: ${id}`}
+        description="There was a problem loading the user"
+        icon={<User className="h-5 w-5" />}
+        backPath="/users"
+        error={error instanceof Error ? error.message : String(error)}
+        className="max-w-full container-fluid px-6"
       >
-        <Helmet>
-          <title>Edit User | Admin Dashboard</title>
-        </Helmet>
-        <Alert variant="destructive">
-          <AlertCircle className="h-4 w-4" />
+        <Alert variant="destructive" className="mt-4">
+          <AlertTriangle className="h-4 w-4" />
           <AlertTitle>Error</AlertTitle>
           <AlertDescription>
-            {error instanceof Error ? error.message : 'Failed to load user details'}
+            {error instanceof Error ? error.message : "Failed to load user information"}
           </AlertDescription>
+          <div className="mt-4">
+            <Button 
+              variant="outline" 
+              size="sm"
+              onClick={() => navigate('/users')}
+              className="mr-2"
+            >
+              <ArrowLeft className="mr-2 h-4 w-4" />
+              Back to Users
+            </Button>
+            <Button 
+              size="sm"
+              onClick={() => window.location.reload()}
+            >
+              Try Again
+            </Button>
+          </div>
         </Alert>
-      </PageLayout>
-    );
-  }
-
-  if (!user) {
-    return (
-      <PageLayout
-        title="Edit User"
-        description="Update user information"
-        backButton
-        backTo="/users"
-      >
-        <Helmet>
-          <title>Edit User | Admin Dashboard</title>
-        </Helmet>
-        <Alert>
-          <AlertTitle>User not found</AlertTitle>
-          <AlertDescription>
-            The requested user does not exist or you don't have permission to edit it.
-          </AlertDescription>
-        </Alert>
-      </PageLayout>
+      </EditTemplate>
     );
   }
 
   return (
-    <PageLayout
-      title={`Edit User: ${user?.username}`}
-      description="Update user information"
-      backButton
-      backTo={`/users/${userId}`}
+    <EditTemplate
+      title={userData?.username || `User ${id}`}
+      subtitle={`User ID: ${id}`}
+      description="Edit user account information"
+      icon={<User className="h-5 w-5" />}
+      backPath="/users"
+      isLoading={isLoading}
+      isSubmitting={form.formState.isSubmitting}
+      error={error instanceof Error ? error.message : error ? String(error) : formError}
+      onSubmit={(e) => {
+        e.preventDefault();
+        form.handleSubmit(onSubmit)();
+      }}
+      className="max-w-full container-fluid px-6"
     >
-      <Helmet>
-        <title>Edit User | Admin Dashboard</title>
-      </Helmet>
-      
-      <Card className="mb-4">
-        <CardHeader>
-          <CardTitle>User Information</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <Form {...form}>
-            <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                {/* Read-only username field */}
-                <FormItem>
-                  <FormLabel>Username (read-only)</FormLabel>
-                  <Input value={user.username} disabled />
-                  <FormDescription>Username cannot be changed after creation</FormDescription>
-                </FormItem>
-                
+      <Form {...form}>
+        <div className="grid grid-cols-1 gap-6">
+          {/* Basic Information Card */}
+          <Card className="overflow-hidden border-primary/10">
+            <div className="bg-gradient-to-r from-primary/5 to-primary/10 py-3 px-6 border-b border-primary/10">
+              <h3 className="font-medium flex items-center gap-2">
+                <User className="h-4 w-4 text-primary" />
+                Basic Information
+              </h3>
+              <p className="text-xs text-muted-foreground mt-1">Primary account details</p>
+            </div>
+            <CardContent className="p-6">
+              <div className="grid gap-6 sm:grid-cols-2">
+                {/* Email */}
                 <FormField
                   control={form.control}
                   name="email"
@@ -229,18 +289,41 @@ const UserEditPage: React.FC = () => {
                     <FormItem>
                       <FormLabel>Email Address</FormLabel>
                       <FormControl>
-                        <Input placeholder="john.doe@example.com" type="email" {...field} />
+                        <div className="relative">
+                          <span className="absolute left-3 top-2.5 text-muted-foreground">
+                            <Mail className="h-4 w-4" />
+                          </span>
+                          <Input placeholder="user@example.com" className="pl-9" {...field} />
+                        </div>
                       </FormControl>
                       <FormMessage />
                     </FormItem>
                   )}
                 />
                 
-                <div className="col-span-2">
-                  <Separator className="my-4" />
-                  <h3 className="text-lg font-medium mb-4">Personal Information</h3>
-                </div>
+                {/* Account Status */}
+                <FormField
+                  control={form.control}
+                  name="is_active"
+                  render={({ field }) => (
+                    <FormItem className="flex flex-row items-center justify-between rounded-lg border p-3 shadow-sm">
+                      <div className="space-y-0.5">
+                        <FormLabel>Account Status</FormLabel>
+                        <FormDescription>
+                          Activate or deactivate this user account
+                        </FormDescription>
+                      </div>
+                      <FormControl>
+                        <Switch
+                          checked={field.value}
+                          onCheckedChange={field.onChange}
+                        />
+                      </FormControl>
+                    </FormItem>
+                  )}
+                />
                 
+                {/* First Name */}
                 <FormField
                   control={form.control}
                   name="first_name"
@@ -255,6 +338,7 @@ const UserEditPage: React.FC = () => {
                   )}
                 />
                 
+                {/* Last Name */}
                 <FormField
                   control={form.control}
                   name="last_name"
@@ -268,12 +352,22 @@ const UserEditPage: React.FC = () => {
                     </FormItem>
                   )}
                 />
-                
-                <div className="col-span-2">
-                  <Separator className="my-4" />
-                  <h3 className="text-lg font-medium mb-4">Profile Details</h3>
-                </div>
-                
+              </div>
+            </CardContent>
+          </Card>
+          
+          {/* Contact Information */}
+          <Card className="overflow-hidden border-primary/10">
+            <div className="bg-gradient-to-r from-primary/5 to-primary/10 py-3 px-6 border-b border-primary/10">
+              <h3 className="font-medium flex items-center gap-2">
+                <Phone className="h-4 w-4 text-primary" />
+                Contact Information
+              </h3>
+              <p className="text-xs text-muted-foreground mt-1">User contact and address details</p>
+            </div>
+            <CardContent className="p-6">
+              <div className="grid gap-6 sm:grid-cols-2">
+                {/* Phone Number */}
                 <FormField
                   control={form.control}
                   name="profile.phone_number"
@@ -281,27 +375,41 @@ const UserEditPage: React.FC = () => {
                     <FormItem>
                       <FormLabel>Phone Number</FormLabel>
                       <FormControl>
-                        <Input placeholder="+1234567890" {...field} />
+                        <div className="relative">
+                          <span className="absolute left-3 top-2.5 text-muted-foreground">
+                            <Phone className="h-4 w-4" />
+                          </span>
+                          <Input placeholder="+1 (555) 123-4567" className="pl-9" {...field} />
+                        </div>
                       </FormControl>
                       <FormMessage />
                     </FormItem>
                   )}
                 />
                 
-                <FormField
-                  control={form.control}
-                  name="profile.address"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Address</FormLabel>
-                      <FormControl>
-                        <Input placeholder="123 Main St" {...field} />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
+                {/* Address */}
+                <div className="sm:col-span-2">
+                  <FormField
+                    control={form.control}
+                    name="profile.address"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Address</FormLabel>
+                        <FormControl>
+                          <div className="relative">
+                            <span className="absolute left-3 top-2.5 text-muted-foreground">
+                              <MapPin className="h-4 w-4" />
+                            </span>
+                            <Input placeholder="123 Main St" className="pl-9" {...field} />
+                          </div>
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                </div>
                 
+                {/* City */}
                 <FormField
                   control={form.control}
                   name="profile.city"
@@ -309,13 +417,14 @@ const UserEditPage: React.FC = () => {
                     <FormItem>
                       <FormLabel>City</FormLabel>
                       <FormControl>
-                        <Input placeholder="New York" {...field} />
+                        <Input placeholder="San Francisco" {...field} />
                       </FormControl>
                       <FormMessage />
                     </FormItem>
                   )}
                 />
                 
+                {/* State */}
                 <FormField
                   control={form.control}
                   name="profile.state"
@@ -323,32 +432,42 @@ const UserEditPage: React.FC = () => {
                     <FormItem>
                       <FormLabel>State</FormLabel>
                       <FormControl>
-                        <Input placeholder="NY" {...field} />
+                        <Input placeholder="California" {...field} />
                       </FormControl>
                       <FormMessage />
                     </FormItem>
                   )}
                 />
                 
+                {/* PIN/ZIP Code */}
                 <FormField
                   control={form.control}
                   name="profile.pin"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>PIN</FormLabel>
+                      <FormLabel>PIN/ZIP Code</FormLabel>
                       <FormControl>
-                        <Input placeholder="12345" {...field} />
+                        <Input placeholder="94105" {...field} />
                       </FormControl>
                       <FormMessage />
                     </FormItem>
                   )}
                 />
-                
-                <div className="col-span-2">
-                  <Separator className="my-4" />
-                  <h3 className="text-lg font-medium mb-4">OCPI Configuration</h3>
-                </div>
-                
+              </div>
+            </CardContent>
+          </Card>
+          
+          {/* OCPI Information */}
+          <Card className="overflow-hidden border-primary/10">
+            <div className="bg-gradient-to-r from-primary/5 to-primary/10 py-3 px-6 border-b border-primary/10">
+              <h3 className="font-medium flex items-center gap-2">
+                <Shield className="h-4 w-4 text-primary" />
+                OCPI Information
+              </h3>
+              <p className="text-xs text-muted-foreground mt-1">Open Charge Point Interface settings</p>
+            </div>
+            <CardContent className="p-6">
+              <div className="grid gap-6 sm:grid-cols-2">
                 <FormField
                   control={form.control}
                   name="profile.ocpi_role"
@@ -360,23 +479,20 @@ const UserEditPage: React.FC = () => {
                         value={field.value}
                       >
                         <FormControl>
-                          <SelectTrigger>
+                          <SelectTrigger className="h-10">
                             <SelectValue placeholder="Select OCPI role" />
                           </SelectTrigger>
                         </FormControl>
                         <SelectContent>
-                          <SelectItem value="CPO">CPO</SelectItem>
-                          <SelectItem value="eMSP">eMSP</SelectItem>
+                          <SelectItem value="CPO">Charge Point Operator (CPO)</SelectItem>
+                          <SelectItem value="eMSP">eMobility Service Provider (eMSP)</SelectItem>
                         </SelectContent>
                       </Select>
-                      <FormDescription>
-                        Charge Point Operator (CPO) or eMobility Service Provider (eMSP)
-                      </FormDescription>
                       <FormMessage />
                     </FormItem>
                   )}
                 />
-                
+                  
                 <FormField
                   control={form.control}
                   name="profile.ocpi_party_id"
@@ -390,37 +506,38 @@ const UserEditPage: React.FC = () => {
                     </FormItem>
                   )}
                 />
-                
-                <FormField
-                  control={form.control}
-                  name="profile.ocpi_token"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>OCPI Token</FormLabel>
-                      <FormControl>
-                        <Input placeholder="OCPI Token" {...field} />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
+                  
+                <div className="col-span-2">
+                  <FormField
+                    control={form.control}
+                    name="profile.ocpi_token"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>OCPI Token</FormLabel>
+                        <FormControl>
+                          <div className="relative">
+                            <span className="absolute left-3 top-2.5 text-muted-foreground">
+                              <Lock className="h-4 w-4" />
+                            </span>
+                            <Input className="pl-9 font-mono text-sm" placeholder="OCPI Token" {...field} />
+                          </div>
+                        </FormControl>
+                        <FormDescription>
+                          This token will be used for API authentication
+                        </FormDescription>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                </div>
               </div>
-              
-              <div className="flex justify-end gap-2">
-                <Button 
-                  variant="outline" 
-                  type="button"
-                  onClick={() => navigate(`/users/${userId}`)}
-                >
-                  Cancel
-                </Button>
-                <Button type="submit">Update User</Button>
-              </div>
-            </form>
-          </Form>
-        </CardContent>
-      </Card>
-    </PageLayout>
+            </CardContent>
+          </Card>
+            
+
+        </div>
+      </Form>
+    </EditTemplate>
   );
 };
 

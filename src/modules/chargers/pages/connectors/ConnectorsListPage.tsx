@@ -1,26 +1,17 @@
 import React, { useState } from 'react';
 import { Helmet } from 'react-helmet-async';
-import { Link } from 'react-router-dom';
-import { PageLayout } from '@/components/layout/PageLayout';
-import { Card, CardContent } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
+import { useNavigate } from 'react-router-dom';
 import { Badge } from '@/components/ui/badge';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Filter, Search, Info, Plus, MoreHorizontal, Sliders, Plug, Power } from 'lucide-react';
-import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
-import { AlertCircle } from 'lucide-react';
+import { Plug, Power } from 'lucide-react';
 import { useToast } from '@/components/ui/use-toast';
 import { useQueryClient, useMutation } from '@tanstack/react-query';
 import { useAuth } from '@/hooks/useAuth';
 import { connectorApi } from '@/modules/chargers/services/connectorService';
 import { useConnectors } from '@/modules/chargers/hooks/useConnectors';
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu';
+import { ListTemplate, Column } from '@/components/templates/list/ListTemplate';
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
+import { Button } from '@/components/ui/button';
 
 // Status colors based on connector status
 const getStatusColor = (status: string) => {
@@ -62,10 +53,13 @@ const getConnectorTypeBadge = (type: string) => {
 };
 
 const ConnectorsListPage = () => {
-  // State for filters
-  const [chargerId, setChargerId] = useState<string | undefined>();
-  const [statusFilter, setStatusFilter] = useState<string | undefined>();
-  const [typeFilter, setTypeFilter] = useState<string | undefined>();
+  const navigate = useNavigate();
+  const [searchQuery, setSearchQuery] = useState('');
+  const [currentPage, setCurrentPage] = useState(1);
+  const [pageSize, setPageSize] = useState(10);
+  const [selectedConnectorId, setSelectedConnectorId] = useState<string | null>(null);
+  const [statusFilter, setStatusFilter] = useState<string>('all');
+  const [typeFilter, setTypeFilter] = useState<string>('all');
   
   // Get auth context and toast
   const { accessToken } = useAuth();
@@ -74,23 +68,24 @@ const ConnectorsListPage = () => {
   
   // Use custom hook for fetching connectors with filters
   const filters = {
-    charger: chargerId,
-    status: statusFilter,
-    type: typeFilter
+    status: statusFilter !== 'all' ? statusFilter : undefined,
+    type: typeFilter !== 'all' ? typeFilter : undefined
   };
   
   const {
     connectors,
     isLoading,
-    error,
-    pagination: { currentPage, setCurrentPage, totalPages, totalItems }
+    error
   } = useConnectors(filters);
+  
+  const connectorsData = connectors?.results || [];
+  const totalItems = connectors?.count || 0;
   
   // Reset all filters
   const resetFilters = () => {
-    setChargerId(undefined);
-    setStatusFilter(undefined);
-    setTypeFilter(undefined);
+    setSearchQuery('');
+    setStatusFilter('all');
+    setTypeFilter('all');
   };
   
   // Delete mutation
@@ -160,244 +155,188 @@ const ConnectorsListPage = () => {
     },
   });
   
+  // Filters component - Status and Type selectors
+  const filtersComponent = (
+    <div className="flex flex-wrap gap-3">
+      <select
+        id="status-filter"
+        value={statusFilter}
+        onChange={(e) => setStatusFilter(e.target.value)}
+        className="h-9 rounded-md border border-input bg-transparent px-3 text-sm ring-offset-background"
+      >
+        <option value="all">All Statuses</option>
+        <option value="Available">Available</option>
+        <option value="Unavailable">Unavailable</option>
+        <option value="Charging">Charging</option>
+        <option value="Faulted">Faulted</option>
+        <option value="Reserved">Reserved</option>
+      </select>
+      
+      <select
+        id="type-filter"
+        value={typeFilter}
+        onChange={(e) => setTypeFilter(e.target.value)}
+        className="h-9 rounded-md border border-input bg-transparent px-3 text-sm ring-offset-background"
+      >
+        <option value="all">All Types</option>
+        <option value="CCS1">CCS1</option>
+        <option value="CCS2">CCS2</option>
+        <option value="CHAdeMO">CHAdeMO</option>
+        <option value="Type1">Type1</option>
+        <option value="Type2">Type2</option>
+      </select>
+    </div>
+  );
+  
+  // Delete confirmation dialog component
+  const confirmDeleteComponent = (
+    <AlertDialog open={!!selectedConnectorId} onOpenChange={(open) => !open && setSelectedConnectorId(null)}>
+      <AlertDialogContent>
+        <AlertDialogHeader>
+          <AlertDialogTitle>Are you sure you want to delete this connector?</AlertDialogTitle>
+          <AlertDialogDescription>
+            This action cannot be undone. This will permanently delete the connector and remove it from the system.
+          </AlertDialogDescription>
+        </AlertDialogHeader>
+        <AlertDialogFooter>
+          <AlertDialogCancel>Cancel</AlertDialogCancel>
+          <AlertDialogAction onClick={() => {
+            if (selectedConnectorId) {
+              deleteMutation.mutate(selectedConnectorId);
+              setSelectedConnectorId(null);
+            }
+          }}>Delete</AlertDialogAction>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
+  );
+  
+  // Define row actions for each connector
+  const rowActions = (connector: any) => [
+    {
+      label: connector.status === 'Available' ? 'Make Unavailable' : 'Make Available',
+      icon: <Power className="h-4 w-4" />,
+      onClick: () => {
+        const newStatus = connector.status === 'Available' ? 'Unavailable' : 'Available';
+        changeAvailabilityMutation.mutate({
+          id: connector.id.toString(),
+          connectorId: connector.connector_id,
+          chargerId: connector.charger,
+          status: newStatus
+        });
+      }
+    },
+    {
+      label: 'Delete',
+      className: 'text-destructive focus:text-destructive',
+      onClick: () => setSelectedConnectorId(connector.id.toString())
+    }
+  ];
+  
+  // Define columns for the connector list
+  const columns: Column<any>[] = [
+    {
+      header: "ID",
+      key: "id",
+      render: (connector) => connector.id
+    },
+    {
+      header: "Connector ID",
+      key: "connector_id",
+      render: (connector) => connector.connector_id
+    },
+    {
+      header: "Status",
+      key: "status",
+      render: (connector) => (
+        <div className="flex items-center">
+          <div className={`w-2 h-2 rounded-full mr-2 ${getStatusColor(connector.status)}`}></div>
+          {connector.status}
+        </div>
+      )
+    },
+    {
+      header: "Type",
+      key: "type",
+      render: (connector) => connector.type || 'Unknown'
+    },
+    {
+      header: "Power",
+      key: "max_power",
+      render: (connector) => connector.max_power ? `${connector.max_power} kW` : 'N/A'
+    },
+    {
+      header: "Charger",
+      key: "charger",
+      render: (connector) => connector.charger || 'N/A'
+    }
+  ];
+
   return (
-    <PageLayout
-      title="Charger Connectors"
-      description="Manage and monitor charging connectors"
-      createRoute="/chargers/connectors/create"
-    >
+    <>
       <Helmet>
-        <title>Charger Connectors | Electric Flow Admin</title>
+        <title>Connectors | EV Admin</title>
       </Helmet>
       
-      {error && (
-        <Alert variant="destructive" className="mb-4">
-          <AlertCircle className="h-4 w-4" />
-          <AlertTitle>Error</AlertTitle>
-          <AlertDescription>
-            {error instanceof Error ? error.message : 'Failed to load connectors'}
-          </AlertDescription>
-        </Alert>
-      )}
+      {confirmDeleteComponent}
       
-      <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between mb-4">
-        <div className="flex items-center space-x-2">
-          <div className="relative">
-            <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
-            <Input
-              type="search"
-              placeholder="Filter by ID..."
-              className="pl-8 md:w-64 lg:w-80"
-              onChange={(e) => setChargerId(e.target.value || undefined)}
-              value={chargerId || ''}
-            />
+      <ListTemplate
+        title="Connectors"
+        icon={<Plug className="h-5 w-5" />}
+        description="View and manage EV charging connectors"
+        data={connectorsData}
+        isLoading={isLoading}
+        error={error ? "Failed to load connectors" : null}
+        columns={columns}
+        searchQuery={searchQuery}
+        onSearchChange={setSearchQuery}
+        searchPlaceholder="Search connectors..."
+        filterComponent={filtersComponent}
+        createPath="/chargers/connectors/create"
+        createButtonText="New Connector"
+        currentPage={currentPage}
+        totalPages={Math.ceil(totalItems / pageSize)}
+        totalItems={totalItems}
+        pageSize={pageSize}
+        onPageChange={setCurrentPage}
+        onPageSizeChange={setPageSize}
+        onRowClick={(connector) => navigate(`/chargers/connectors/${connector.id}`)}
+        rowActions={(connector) => (
+          <div className="flex items-center space-x-1">
+            <Button 
+              size="sm" 
+              variant="ghost" 
+              onClick={(e) => {
+                e.stopPropagation();
+                const newStatus = connector.status === 'Available' ? 'Unavailable' : 'Available';
+                changeAvailabilityMutation.mutate({
+                  id: connector.id.toString(),
+                  connectorId: connector.connector_id,
+                  chargerId: connector.charger,
+                  status: newStatus
+                });
+              }}
+            >
+              <Power className="h-4 w-4" />
+            </Button>
+            <Button 
+              size="sm" 
+              variant="ghost" 
+              className="text-destructive hover:text-destructive" 
+              onClick={(e) => {
+                e.stopPropagation();
+                setSelectedConnectorId(connector.id.toString());
+              }}
+            >
+              Delete
+            </Button>
           </div>
-        </div>
-        
-        <div className="flex flex-col gap-2 sm:flex-row">
-          <Button variant="outline" size="sm" className="h-10" onClick={resetFilters}>
-            Reset Filters
-          </Button>
-          <Button size="sm" className="h-10" asChild>
-            <Link to="/chargers/connectors/create">
-              <Plus className="mr-2 h-4 w-4" />
-              New Connector
-            </Link>
-          </Button>
-        </div>
-      </div>
-      
-      {/* Filter options */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
-        <div>
-          <label className="text-sm font-medium mb-1 block">Charger ID</label>
-          <Input
-            placeholder="Filter by charger"
-            value={chargerId || ''}
-            onChange={(e) => setChargerId(e.target.value || undefined)}
-          />
-        </div>
-        <div>
-          <label className="text-sm font-medium mb-1 block">Status</label>
-          <Select
-            value={statusFilter || 'all'}
-            onValueChange={(value) => setStatusFilter(value === 'all' ? undefined : value)}
-          >
-            <SelectTrigger>
-              <SelectValue placeholder="All Statuses" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">All Statuses</SelectItem>
-              <SelectItem value="Available">Available</SelectItem>
-              <SelectItem value="Unavailable">Unavailable</SelectItem>
-              <SelectItem value="Charging">Charging</SelectItem>
-              <SelectItem value="Faulted">Faulted</SelectItem>
-              <SelectItem value="Reserved">Reserved</SelectItem>
-              <SelectItem value="SuspendedEVSE">Suspended (EVSE)</SelectItem>
-              <SelectItem value="SuspendedEV">Suspended (EV)</SelectItem>
-              <SelectItem value="Finishing">Finishing</SelectItem>
-              <SelectItem value="Preparing">Preparing</SelectItem>
-            </SelectContent>
-          </Select>
-        </div>
-        <div>
-          <label className="text-sm font-medium mb-1 block">Connector Type</label>
-          <Select
-            value={typeFilter || 'all'}
-            onValueChange={(value) => setTypeFilter(value === 'all' ? undefined : value)}
-          >
-            <SelectTrigger>
-              <SelectValue placeholder="All Types" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">All Types</SelectItem>
-              <SelectItem value="CCS1">CCS1</SelectItem>
-              <SelectItem value="CCS2">CCS2</SelectItem>
-              <SelectItem value="CHAdeMO">CHAdeMO</SelectItem>
-              <SelectItem value="Type1">Type1</SelectItem>
-              <SelectItem value="Type2">Type2</SelectItem>
-            </SelectContent>
-          </Select>
-        </div>
-      </div>
-      
-      <Card>
-        <CardContent className="p-0">
-          <div className="overflow-x-auto">
-            {isLoading ? (
-              <div className="flex justify-center items-center p-8">
-                <div className="flex flex-col items-center">
-                  <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary border-t-transparent"></div>
-                  <p className="mt-2 text-sm text-muted-foreground">Loading connectors...</p>
-                </div>
-              </div>
-            ) : connectors?.results && connectors.results.length > 0 ? (
-              <>
-                <table className="w-full text-sm">
-                  <thead>
-                    <tr className="border-b bg-muted/40">
-                      <th className="p-3 text-left font-medium">ID</th>
-                      <th className="p-3 text-left font-medium">Charger</th>
-                      <th className="p-3 text-left font-medium">Connector ID</th>
-                      <th className="p-3 text-left font-medium">Type</th>
-                      <th className="p-3 text-left font-medium">Status</th>
-                      <th className="p-3 text-left font-medium">Actions</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {connectors.results.map((connector) => (
-                      <tr key={connector.id} className="hover:bg-muted/50 border-b">
-                        <td className="p-3 font-medium">{connector.id}</td>
-                        <td className="p-3">
-                          <Link 
-                            to={`/chargers/chargers/${connector.charger}`}
-                            className="text-primary hover:underline"
-                          >
-                            {connector.charger}
-                          </Link>
-                        </td>
-                        <td className="p-3">{connector.connector_id}</td>
-                        <td className="p-3">
-                          {getConnectorTypeBadge(connector.type)}
-                        </td>
-                        <td className="p-3">
-                          <div className="flex items-center">
-                            <div className={`h-2 w-2 rounded-full mr-2 ${getStatusColor(connector.status)}`}></div>
-                            <span>{connector.status}</span>
-                          </div>
-                        </td>
-                        <td className="p-3">
-                          <div className="flex items-center space-x-2">
-                            <Button size="sm" variant="ghost" asChild>
-                              <Link to={`/chargers/connectors/${connector.id}`}>
-                                <Info className="h-4 w-4" />
-                              </Link>
-                            </Button>
-                            <Button size="sm" variant="ghost" asChild>
-                              <Link to={`/chargers/connectors/${connector.id}/edit`}>
-                                <Sliders className="h-4 w-4" />
-                              </Link>
-                            </Button>
-                            <DropdownMenu>
-                              <DropdownMenuTrigger asChild>
-                                <Button size="sm" variant="ghost">
-                                  <MoreHorizontal className="h-4 w-4" />
-                                </Button>
-                              </DropdownMenuTrigger>
-                              <DropdownMenuContent align="end">
-                                <DropdownMenuItem 
-                                  onClick={() => {
-                                    const newStatus = connector.status === 'Available' ? 'Unavailable' : 'Available';
-                                    changeAvailabilityMutation.mutate({
-                                      id: connector.id.toString(),
-                                      connectorId: connector.connector_id,
-                                      chargerId: connector.charger,
-                                      status: newStatus
-                                    });
-                                  }}
-                                >
-                                  <Power className="h-4 w-4 mr-2" />
-                                  {connector.status === 'Available' ? 'Make Unavailable' : 'Make Available'}
-                                </DropdownMenuItem>
-                                <DropdownMenuItem 
-                                  onClick={() => {
-                                    if (window.confirm(`Are you sure you want to delete this connector?`)) {
-                                      deleteMutation.mutate(connector.id.toString());
-                                    }
-                                  }}
-                                  className="text-destructive focus:text-destructive"
-                                >
-                                  Delete
-                                </DropdownMenuItem>
-                              </DropdownMenuContent>
-                            </DropdownMenu>
-                          </div>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-
-                {/* Pagination controls */}
-                <div className="flex items-center justify-between px-4 py-2 border-t">
-                  <div>
-                    <p className="text-sm text-muted-foreground">
-                      Showing <span className="font-medium">{connectors.results.length}</span> of{' '}
-                      <span className="font-medium">{connectors.count}</span> items
-                    </p>
-                  </div>
-                  <div className="flex items-center space-x-2">
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => setCurrentPage(currentPage - 1)}
-                      disabled={currentPage === 1 || !connectors.previous}
-                    >
-                      Previous
-                    </Button>
-                    <span className="text-sm">
-                      Page {currentPage} of {totalPages}
-                    </span>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => setCurrentPage(currentPage + 1)}
-                      disabled={!connectors.next || currentPage === totalPages}
-                    >
-                      Next
-                    </Button>
-                  </div>
-                </div>
-              </>
-            ) : (
-              <div className="p-8 text-center">
-                <p className="text-muted-foreground">No connectors found.</p>
-              </div>
-            )}
-          </div>
-        </CardContent>
-      </Card>
-    </PageLayout>
+        )}
+        className="shadow-md border border-gray-100 rounded-lg overflow-hidden"
+        tableClassName="[&_tr:hover]:bg-gray-50/80 [&_th]:bg-gray-50/70 [&_th]:text-gray-600 [&_th]:font-medium"
+        actionBarClassName="border-b border-gray-100 bg-gray-50/40"
+      />
+    </>
   );
 };
 

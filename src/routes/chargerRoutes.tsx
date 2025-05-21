@@ -98,8 +98,8 @@ export const chargerRoutes = (
     <Route path="chargers/remote-operations/change-availability" element={<ChangeAvailabilityPage />} />
     <Route path="chargers/remote-operations/trigger-message" element={<TriggerMessagePage />} />
     <Route path="chargers/remote-operations/update-firmware" element={<UpdateFirmwarePage />} />
-    <Route path="chargers/session-controls/start" element={<RemoteStartPage />} />
-    <Route path="chargers/session-controls/stop" element={<RemoteStopPage />} />
+    <Route path="chargers/remote-operations/start" element={<RemoteStartPage />} />
+    <Route path="chargers/remote-operations/stop" element={<RemoteStopPage />} />
     
     {/* These generic routes must be at the end to avoid overriding more specific routes */}
     <Route path="chargers/:id" element={<ChargerDetailPage />} />

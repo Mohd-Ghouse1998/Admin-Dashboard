@@ -52,9 +52,9 @@ const OCPIAppWrapper: React.FC = () => {
       return;
     }
     
-    // If authenticated and on an auth page, redirect to dashboard
+    // If authenticated and on an auth page, redirect to dashboard (at root path)
     if (isAuthenticated && authPaths.some(path => location.pathname.startsWith(path))) {
-      navigate('/dashboard', { replace: true });
+      navigate('/', { replace: true });
     }
   }, [isAuthenticated, isLoading, location.pathname, navigate]);
   

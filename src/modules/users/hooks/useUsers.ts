@@ -29,7 +29,8 @@ export const useUsers = (
     queryKey: ['users', searchQuery, statusFilter, page],
     queryFn: async () => {
       try {
-        return await userService.getUsers();
+        console.log('Fetching users with params:', params);
+        return await userService.getUsers(params);
       } catch (err) {
         console.error('Error fetching users:', err);
         throw err;
@@ -49,10 +50,12 @@ export const useUsers = (
   });
 
   // Process data for UI display
-  // The axios response has data property that contains the actual API response
+  // The axios response structure: response.data contains the API payload
   // Log the full data structure to debug
   console.log("Users hook data structure:", data);
   
+  // Properly extract data from Axios response
+  // Axios wraps the response in a 'data' property
   return {
     users: data?.data || { results: [], count: 0, next: null, previous: null },
     isLoading,

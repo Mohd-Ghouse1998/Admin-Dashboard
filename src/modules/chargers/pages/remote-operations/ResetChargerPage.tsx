@@ -4,8 +4,8 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { useQuery, useMutation } from '@tanstack/react-query';
 import { Helmet } from 'react-helmet-async';
-import { PageLayout } from '@/components/layout/PageLayout';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { CreateTemplate, CreateSectionHeader } from '@/components/templates/create/CreateTemplate';
+import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/components/ui/use-toast';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
@@ -102,35 +102,30 @@ const ResetChargerPage = () => {
     resetChargerMutation.mutate(values);
   };
   
+  // Process errors
+  const errorMessage = chargersError ? 
+    (chargersError instanceof Error ? chargersError.message : 'Failed to load chargers') : null;
+    
   return (
-    <PageLayout
+    <CreateTemplate
       title="Reset Charger"
-      description="Reset a charger remotely"
+      description="Remotely reset a charging station's software or hardware"
+      icon={<RotateCcw className="h-5 w-5" />}
+      entityName="Reset"
+      backPath="/chargers/remote-operations"
+      error={errorMessage}
+      isSubmitting={resetChargerMutation.isPending}
+      onSubmit={form.handleSubmit(onSubmit)}
     >
-      <Helmet>
-        <title>Reset Charger | Electric Flow Admin</title>
-      </Helmet>
-      
-      {chargersError && (
-        <Alert variant="destructive" className="mb-4">
-          <AlertCircle className="h-4 w-4" />
-          <AlertTitle>Error</AlertTitle>
-          <AlertDescription>
-            {chargersError instanceof Error ? chargersError.message : 'Failed to load chargers'}
-          </AlertDescription>
-        </Alert>
-      )}
-      
-      <Card>
-        <CardHeader>
-          <CardTitle>Reset Charger</CardTitle>
-          <CardDescription>
-            Reset a charger remotely. A soft reset will restart the software, while a hard reset will restart the entire device.
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <Form {...form}>
-            <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
+      <Form {...form}>
+        <div className="space-y-6">
+          <div className="border rounded-md overflow-hidden">
+            <CreateSectionHeader 
+              title="Reset Details" 
+              description="Select a charger and reset type"
+              icon={<RotateCcw className="h-4 w-4" />}
+            />
+            <div className="p-6 space-y-6">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <FormField
                   control={form.control}
@@ -147,7 +142,7 @@ const ResetChargerPage = () => {
                         value={field.value}
                       >
                         <FormControl>
-                          <SelectTrigger>
+                          <SelectTrigger className="h-10 border-border hover:border-primary/20 focus:ring-1 focus:ring-primary/30 focus:border-primary/30">
                             <SelectValue placeholder="Select a charger" />
                           </SelectTrigger>
                         </FormControl>
@@ -185,21 +180,21 @@ const ResetChargerPage = () => {
                         <RadioGroup
                           onValueChange={field.onChange}
                           defaultValue={field.value}
-                          className="flex flex-col space-y-1"
+                          className="flex flex-col space-y-1 p-3 border border-border rounded-md"
                         >
-                          <FormItem className="flex items-center space-x-3 space-y-0">
+                          <FormItem className="flex items-center space-x-3 space-y-0 hover:bg-muted/20 p-2 rounded-md cursor-pointer">
                             <FormControl>
-                              <RadioGroupItem value="Soft" />
+                              <RadioGroupItem value="Soft" className="text-primary border-primary/30" />
                             </FormControl>
-                            <FormLabel className="font-normal">
+                            <FormLabel className="font-normal cursor-pointer">
                               Soft Reset (Software restart)
                             </FormLabel>
                           </FormItem>
-                          <FormItem className="flex items-center space-x-3 space-y-0">
+                          <FormItem className="flex items-center space-x-3 space-y-0 hover:bg-muted/20 p-2 rounded-md cursor-pointer">
                             <FormControl>
-                              <RadioGroupItem value="Hard" />
+                              <RadioGroupItem value="Hard" className="text-primary border-primary/30" />
                             </FormControl>
-                            <FormLabel className="font-normal">
+                            <FormLabel className="font-normal cursor-pointer">
                               Hard Reset (Device restart)
                             </FormLabel>
                           </FormItem>
@@ -210,32 +205,11 @@ const ResetChargerPage = () => {
                   )}
                 />
               </div>
-              
-              <div className="flex justify-end">
-                <Button 
-                  type="submit" 
-                  disabled={resetChargerMutation.isPending}
-                  className="ml-auto"
-                  variant="destructive"
-                >
-                  {resetChargerMutation.isPending ? (
-                    <>
-                      <div className="mr-2 h-4 w-4 animate-spin rounded-full border-2 border-background border-t-transparent"></div>
-                      Resetting...
-                    </>
-                  ) : (
-                    <>
-                      <RotateCcw className="mr-2 h-4 w-4" />
-                      Reset Charger
-                    </>
-                  )}
-                </Button>
-              </div>
-            </form>
-          </Form>
-        </CardContent>
-      </Card>
-    </PageLayout>
+            </div>
+          </div>
+        </div>
+      </Form>
+    </CreateTemplate>
   );
 };
 

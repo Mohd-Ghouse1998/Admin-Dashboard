@@ -51,37 +51,54 @@ export interface PaginatedResponse<T> {
 }
 
 // Get all wallets
-export const getWallets = () => 
-  axiosInstance.get<PaginatedResponse<Wallet>>('/users/wallets/');
+export const getWallets = async (): Promise<Wallet[]> => {
+  const response = await axiosInstance.get('/api/payment/wallets/');
+  return response.data;
+};
 
 // Get a specific wallet by ID
-export const getWallet = (id: number) => 
-  axiosInstance.get<Wallet>(`/users/wallets/${id}/`);
+export const getWallet = async (id: number): Promise<Wallet> => {
+  const response = await axiosInstance.get(`/api/payment/wallets/${id}/`);
+  return response.data;
+};
 
 // Create a new wallet
-export const createWallet = (data: { user: number; amount: number; reason?: string }) => 
-  axiosInstance.post<Wallet>('/users/wallets/', data);
+export const createWallet = async (data: { user: number; amount: number; reason?: string }): Promise<Wallet> => {
+  const response = await axiosInstance.post('/api/payment/wallets/', data);
+  return response.data;
+};
 
 // Update an existing wallet
-export const updateWallet = (id: number, data: Partial<Wallet>) => 
-  axiosInstance.put<Wallet>(`/users/wallets/${id}/`, data);
+export const updateWallet = async (id: number, data: Partial<Wallet>): Promise<Wallet> => {
+  const response = await axiosInstance.patch(`/api/payment/wallets/${id}/`, data);
+  return response.data;
+};
 
 // Delete a wallet
-export const deleteWallet = (id: number) => 
-  axiosInstance.delete(`/users/wallets/${id}/`);
+export const deleteWallet = async (id: number): Promise<void> => {
+  await axiosInstance.delete(`/api/payment/wallets/${id}/`);
+};
 
 // Get current user's wallet balance
-export const getWalletBalance = () => 
-  axiosInstance.get<WalletBalance>('/users/wallets/balance/');
+export const getWalletBalance = async (): Promise<WalletBalance> => {
+  const response = await axiosInstance.get('/api/payment/wallets/balance/');
+  return response.data;
+};
 
 // Create a wallet deposit order
-export const createWalletDepositOrder = (amount: number) => 
-  axiosInstance.post<WalletDepositOrder>('/users/razorpay/create_wallet_deposit_order/', { amount });
+export const createWalletDepositOrder = async (amount: number): Promise<WalletDepositOrder> => {
+  const response = await axiosInstance.post('/api/payment/wallets/deposit/order/', { amount });
+  return response.data;
+};
 
 // Handle payment success
-export const handlePaymentSuccess = (data: PaymentSuccessRequest) => 
-  axiosInstance.post('/users/razorpay/handle_payment_success/', data);
+export const handlePaymentSuccess = async (data: PaymentSuccessRequest): Promise<{ success: boolean }> => {
+  const response = await axiosInstance.post('/api/payment/wallets/deposit/success/', data);
+  return response.data;
+};
 
 // Process refund
-export const processRefund = (data: RefundRequest) => 
-  axiosInstance.post('/users/razorpay-refund/', data);
+export const processRefund = async (data: RefundRequest): Promise<{ success: boolean }> => {
+  const response = await axiosInstance.post('/api/payment/wallets/refund/', data);
+  return response.data;
+};

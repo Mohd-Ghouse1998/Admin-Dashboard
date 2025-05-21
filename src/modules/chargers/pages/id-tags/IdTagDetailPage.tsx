@@ -1,46 +1,63 @@
 import React, { useState } from 'react';
-import { Helmet } from 'react-helmet-async';
-import { Link, useParams, useNavigate } from 'react-router-dom';
-import { PageLayout } from '@/components/layout/PageLayout';
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardFooter,
-  CardHeader,
-  CardTitle,
-} from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
+import { useNavigate, useParams } from 'react-router-dom';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { chargerApi } from '@/modules/chargers/services/chargerService';
+import { useAuth } from '@/hooks/useAuth';
+import { useToast } from '@/hooks/use-toast';
+import { format } from 'date-fns';
+
+// UI Components
+import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent } from '@/components/ui/card';
 import { Separator } from '@/components/ui/separator';
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
+import { DetailTemplate, DetailSection } from '@/components/templates/detail/DetailTemplate';
 import { 
-  AlertCircle, 
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
+
+// Icons
+import { 
   Tag, 
-  Edit, 
-  Trash2, 
-  ArrowLeft, 
   Calendar, 
   UserCheck,
   ShieldAlert,
   Clock,
   Key,
-  Link as LinkIcon
+  Link as LinkIcon,
+  AlertCircle,
+  Trash2,
+  Edit,
+  Info,
+  User as UserIcon,
+  GitBranch,
+  Copy,
+  Ban,
+  CheckCircle2,
+  XCircle,
+  Loader2
 } from 'lucide-react';
-import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { chargerApi } from '@/modules/chargers/services/chargerService';
-import { useAuth } from '@/hooks/useAuth';
-import { format } from 'date-fns';
-import { useToast } from '@/components/ui/use-toast';
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from '@/components/ui/dialog';
-import { Loader2 } from 'lucide-react';
+
+// ID Tag interface
+interface IDTag {
+  id: number;
+  idtag: string;
+  user?: number;
+  parent_idtag?: string | null;
+  is_blocked: boolean;
+  expiry_date?: string | null;
+  is_expired: boolean;
+  created_at?: string;
+}
 
 const IdTagDetailPage = () => {
   const { id } = useParams<{ id: string }>();
@@ -48,6 +65,8 @@ const IdTagDetailPage = () => {
   const { toast } = useToast();
   const { accessToken } = useAuth();
   const queryClient = useQueryClient();
+  
+  // State variables for dialogs
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
   const [isBlockDialogOpen, setIsBlockDialogOpen] = useState(false);
   
@@ -118,6 +137,22 @@ const IdTagDetailPage = () => {
     }
   });
   
+  // Format dates in a readable way
+  const formatDate = (dateString?: string) => {
+    if (!dateString) return 'N/A';
+    const date = new Date(dateString);
+    return format(date, 'PPpp');
+  };
+  
+  // Function to copy text to clipboard
+  const copyToClipboard = (text: string, message: string) => {
+    navigator.clipboard.writeText(text);
+    toast({
+      title: "Copied!",
+      description: message,
+    });
+  };
+  
   // Handle delete
   const handleDelete = () => {
     deleteMutation.mutate();
@@ -128,232 +163,279 @@ const IdTagDetailPage = () => {
     blockMutation.mutate();
   };
   
-  if (isLoading || !accessToken) {
+  // Error state if no data
+  if (error && !isLoading) {
+    const errorMessage = error instanceof Error ? error.message : String(error);
+    
     return (
-      <PageLayout
-        title="Loading ID Tag"
-        description="Please wait while we load the ID tag details"
-        backButton
-        backTo="/chargers/id-tags"
-      >
-        <div className="flex h-[400px] items-center justify-center">
-          <div className="flex flex-col items-center">
-            <Loader2 className="h-8 w-8 animate-spin text-primary" />
-            <p className="mt-2 text-muted-foreground">Loading ID tag details...</p>
-          </div>
-        </div>
-      </PageLayout>
+      <DetailTemplate
+        title="ID Tag"
+        subtitle="Error loading ID tag details"
+        icon={<Tag className="h-5 w-5" />}
+        backPath="/chargers/id-tags"
+        backLabel="Back to ID Tags"
+        error={errorMessage}
+      />
     );
   }
   
-  if (error) {
-    return (
-      <PageLayout
-        title="Error Loading ID Tag"
-        description="There was an error loading the ID tag details"
-        backButton
-        backTo="/chargers/id-tags"
-      >
-        <Alert variant="destructive" className="mt-6">
-          <AlertCircle className="h-4 w-4" />
-          <AlertTitle>Error</AlertTitle>
-          <AlertDescription>
-            There was a problem loading the ID tag details. Please try again.
-          </AlertDescription>
-        </Alert>
-        
-        <Button
-          variant="outline"
-          className="mt-4"
-          onClick={() => navigate('/chargers/id-tags')}
-        >
-          <ArrowLeft className="mr-2 h-4 w-4" />
-          Go Back to ID Tags
-        </Button>
-      </PageLayout>
-    );
-  }
-  
-  if (!idTag) {
-    return (
-      <PageLayout
-        title="ID Tag Not Found"
-        description="The requested ID tag could not be found"
-        backButton
-        backTo="/chargers/id-tags"
-      >
-        <Alert variant="default" className="mt-6">
-          <AlertCircle className="h-4 w-4" />
-          <AlertTitle>Not Found</AlertTitle>
-          <AlertDescription>
-            The ID tag you are looking for could not be found. It may have been deleted.
-          </AlertDescription>
-        </Alert>
-        
-        <Button
-          variant="outline"
-          className="mt-4"
-          onClick={() => navigate('/chargers/id-tags')}
-        >
-          <ArrowLeft className="mr-2 h-4 w-4" />
-          Go Back to ID Tags
-        </Button>
-      </PageLayout>
-    );
-  }
-  
-  // Format expiry date if present
-  const formattedExpiryDate = idTag.expiry_date
-    ? format(new Date(idTag.expiry_date), 'PPpp')
-    : 'No expiry date';
+  // Define actions for the DetailTemplate
+  const actions = [
+    {
+      label: idTag?.is_blocked ? 'Unblock' : 'Block',
+      icon: <ShieldAlert className="h-4 w-4" />,
+      onClick: () => setIsBlockDialogOpen(true),
+      variant: idTag?.is_blocked ? 'default' : 'destructive' as 'default' | 'destructive'
+    }
+  ];
   
   return (
-    <PageLayout
-      title={`ID Tag: ${idTag.idtag}`}
-      description="View and manage ID tag details"
-      backButton
-      backTo="/chargers/id-tags"
-      actions={
-        <div className="flex items-center gap-2">
-          <Button 
-            variant="outline" 
-            asChild
-          >
-            <Link to={`/chargers/id-tags/${id}/edit`}>
-              <Edit className="mr-2 h-4 w-4" />
-              Edit
-            </Link>
-          </Button>
-          
-          <Button
-            variant={idTag.is_blocked ? "default" : "destructive"}
-            onClick={() => setIsBlockDialogOpen(true)}
-          >
-            <ShieldAlert className="mr-2 h-4 w-4" />
-            {idTag.is_blocked ? 'Unblock' : 'Block'}
-          </Button>
-          
-          <Button 
-            variant="destructive"
-            onClick={() => setIsDeleteDialogOpen(true)}
-          >
-            <Trash2 className="mr-2 h-4 w-4" />
-            Delete
-          </Button>
-        </div>
-      }
-    >
-      <Helmet>
-        <title>ID Tag Details | Electric Flow Admin Portal</title>
-      </Helmet>
-      
-      <div className="grid gap-6 md:grid-cols-2">
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center">
-              <Tag className="mr-2 h-5 w-5" />
-              Basic Information
-            </CardTitle>
-            <CardDescription>ID tag details and configurations</CardDescription>
-          </CardHeader>
-          
-          <CardContent className="space-y-6">
-            <div>
-              <h3 className="text-sm font-medium text-muted-foreground">ID Tag</h3>
-              <p className="text-xl font-semibold flex items-center">
-                <Key className="mr-2 h-4 w-4 text-muted-foreground" />
-                {idTag.idtag}
-              </p>
-            </div>
-            
-            <Separator />
-            
-            <div>
-              <h3 className="text-sm font-medium text-muted-foreground">Status</h3>
-              <div className="mt-1 flex items-center gap-2">
-                <Badge variant={idTag.is_blocked ? "destructive" : "success"}>
-                  {idTag.is_blocked ? 'Blocked' : 'Active'}
-                </Badge>
+    <>
+      <DetailTemplate
+        title={idTag ? `ID Tag: ${idTag.idtag}` : 'ID Tag Details'}
+        subtitle={idTag ? `Manage and view details for ID tag ${idTag.idtag}` : 'Loading...'}
+        description={idTag?.is_blocked ? 'This ID tag is currently blocked' : undefined}
+        icon={<Tag className="h-5 w-5" />}
+        backPath="/chargers/id-tags"
+        backLabel="Back to ID Tags"
+        isLoading={isLoading}
+        error={error ? String(error) : null}
+        editPath={idTag ? `/chargers/id-tags/${id}/edit` : undefined}
+        onDelete={() => setIsDeleteDialogOpen(true)}
+        actions={actions}
+      >
+        {idTag && (
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            <DetailSection
+              title="Basic Information"
+              description="ID tag details and configuration"
+              icon={<Key className="h-5 w-5" />}
+              className="h-fit"
+            >
+              <div className="space-y-4">
+                <div className="flex flex-col gap-1">
+                  <span className="text-sm text-muted-foreground">ID Tag</span>
+                  <div className="flex items-center gap-2">
+                    <span className="text-lg font-semibold">{idTag.idtag}</span>
+                    <Button 
+                      variant="ghost" 
+                      size="sm"
+                      className="h-7 w-7 p-0"
+                      onClick={() => copyToClipboard(idTag.idtag, "ID Tag copied to clipboard")}
+                    >
+                      <Copy className="h-3.5 w-3.5" />
+                    </Button>
+                  </div>
+                </div>
                 
-                {idTag.is_expired && (
-                  <Badge variant="destructive">Expired</Badge>
-                )}
+                <Separator className="my-3" />
+                
+                <div className="flex flex-col gap-1">
+                  <span className="text-sm text-muted-foreground">Status</span>
+                  <div className="flex items-center gap-2">
+                    {idTag.is_blocked ? (
+                      <Badge variant="destructive" className="flex items-center gap-1">
+                        <Ban className="h-3.5 w-3.5" />
+                        Blocked
+                      </Badge>
+                    ) : (
+                      <Badge variant="outline" className="bg-green-50 text-green-700 border-green-200 flex items-center gap-1">
+                        <CheckCircle2 className="h-3.5 w-3.5" />
+                        Active
+                      </Badge>
+                    )}
+                    
+                    {idTag.is_expired && (
+                      <Badge variant="destructive" className="flex items-center gap-1">
+                        <XCircle className="h-3.5 w-3.5" />
+                        Expired
+                      </Badge>
+                    )}
+                  </div>
+                </div>
+                
+                <Separator className="my-3" />
+                
+                <div className="flex flex-col gap-1">
+                  <span className="text-sm text-muted-foreground">Expiry Date</span>
+                  <div className="flex items-center gap-2">
+                    <Calendar className="h-4 w-4 text-muted-foreground" />
+                    <span className={idTag.is_expired ? "text-destructive font-medium" : ""}>
+                      {idTag.expiry_date 
+                        ? formatDate(idTag.expiry_date)
+                        : <span className="text-muted-foreground">No expiry date</span>
+                      }
+                    </span>
+                  </div>
+                </div>
+                
+                <Separator className="my-3" />
+                
+                <div className="flex flex-col gap-1">
+                  <span className="text-sm text-muted-foreground">User Assignment</span>
+                  <div className="flex items-center gap-2">
+                    <UserIcon className="h-4 w-4 text-muted-foreground" />
+                    {idTag.user ? (
+                      <Button 
+                        variant="link" 
+                        className="p-0 h-auto text-primary"
+                        onClick={() => navigate(`/users/${idTag.user}`)}
+                      >
+                        User {idTag.user}
+                      </Button>
+                    ) : (
+                      <span className="text-muted-foreground">Not assigned to any user</span>
+                    )}
+                  </div>
+                </div>
+                
+                <Separator className="my-3" />
+                
+                <div className="flex flex-col gap-1">
+                  <span className="text-sm text-muted-foreground">Parent ID Tag</span>
+                  <div className="flex items-center gap-2">
+                    <GitBranch className="h-4 w-4 text-muted-foreground" />
+                    {idTag.parent_idtag ? (
+                      <span>{idTag.parent_idtag}</span>
+                    ) : (
+                      <span className="text-muted-foreground">No parent ID tag</span>
+                    )}
+                  </div>
+                </div>
               </div>
-            </div>
+            </DetailSection>
             
-            <Separator />
-            
-            <div>
-              <h3 className="text-sm font-medium text-muted-foreground">Expiry Date</h3>
-              <div className="flex items-center gap-2 mt-1">
-                <Calendar className="h-4 w-4 text-muted-foreground" />
-                <span className={idTag.is_expired ? "text-destructive" : ""}>
-                  {formattedExpiryDate}
-                </span>
+            <DetailSection
+              title="Usage Analytics"
+              description="Usage statistics and performance metrics"
+              icon={<Clock className="h-5 w-5" />}
+              className="h-fit"
+            >
+              <div className="grid grid-cols-2 gap-4">
+                <Card className="bg-gray-50/50">
+                  <CardContent className="p-4">
+                    <div className="text-center py-8">
+                      <p className="text-muted-foreground text-sm">No usage data available yet</p>
+                    </div>
+                  </CardContent>
+                </Card>
+                
+                <Card className="bg-gray-50/50">
+                  <CardContent className="p-4">
+                    <div className="text-center py-8">
+                      <p className="text-muted-foreground text-sm">No session data available yet</p>
+                    </div>
+                  </CardContent>
+                </Card>
               </div>
-            </div>
+              
+              <Alert className="mt-4">
+                <Info className="h-4 w-4" />
+                <AlertTitle>Information</AlertTitle>
+                <AlertDescription>
+                  Usage analytics will be shown here once the ID tag has been used at charging stations.
+                </AlertDescription>
+              </Alert>
+            </DetailSection>
             
-            <Separator />
-            
-            <div>
-              <h3 className="text-sm font-medium text-muted-foreground">User Assignment</h3>
-              <div className="flex items-center gap-2 mt-1">
-                <UserCheck className="h-4 w-4 text-muted-foreground" />
-                {idTag.user ? (
-                  <Link 
-                    to={`/users/${idTag.user}`}
-                    className="text-primary hover:underline"
-                  >
-                    User {idTag.user}
-                  </Link>
-                ) : (
-                  <span className="text-muted-foreground">Not assigned to any user</span>
-                )}
+            <DetailSection
+              title="Authorization Settings"
+              description="Control authorization and security settings"
+              icon={<ShieldAlert className="h-5 w-5" />}
+              className="h-fit lg:col-span-2"
+            >
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div>
+                  <h3 className="text-sm font-medium mb-2">Access Control</h3>
+                  <div className="space-y-3">
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm">Authorization Status</span>
+                      {idTag.is_blocked ? (
+                        <Badge variant="destructive">Blocked</Badge>
+                      ) : (
+                        <Badge variant="outline" className="bg-green-50 text-green-700 border-green-200">
+                          Authorized
+                        </Badge>
+                      )}
+                    </div>
+                    
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm">Validity Status</span>
+                      {idTag.is_expired ? (
+                        <Badge variant="destructive">Expired</Badge>
+                      ) : (
+                        <Badge variant="outline" className="bg-green-50 text-green-700 border-green-200">
+                          Valid
+                        </Badge>
+                      )}
+                    </div>
+                  </div>
+                  
+                  <div className="mt-4">
+                    <Button 
+                      variant={idTag.is_blocked ? "default" : "destructive"}
+                      className="w-full"
+                      onClick={() => setIsBlockDialogOpen(true)}
+                    >
+                      <ShieldAlert className="h-4 w-4 mr-2" />
+                      {idTag.is_blocked ? 'Unblock ID Tag' : 'Block ID Tag'}
+                    </Button>
+                  </div>
+                </div>
+                
+                <div>
+                  <h3 className="text-sm font-medium mb-2">Expiration Management</h3>
+                  <div className="space-y-3">
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm">Expiry Date</span>
+                      <span className={idTag.is_expired ? "text-destructive font-medium" : ""}>
+                        {idTag.expiry_date 
+                          ? formatDate(idTag.expiry_date)
+                          : <span className="text-muted-foreground">No expiry date</span>
+                        }
+                      </span>
+                    </div>
+                    
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm">Status</span>
+                      {idTag.is_expired ? (
+                        <Badge variant="destructive">Expired</Badge>
+                      ) : (
+                        <Badge variant="outline" className="bg-green-50 text-green-700 border-green-200">
+                          Active
+                        </Badge>
+                      )}
+                    </div>
+                  </div>
+                  
+                  <div className="mt-4">
+                    <Button 
+                      variant="outline"
+                      className="w-full"
+                      asChild
+                    >
+                      <a href={`/chargers/id-tags/${id}/edit`}>
+                        <Calendar className="h-4 w-4 mr-2" />
+                        Update Expiry Date
+                      </a>
+                    </Button>
+                  </div>
+                </div>
               </div>
-            </div>
-            
-            <Separator />
-            
-            <div>
-              <h3 className="text-sm font-medium text-muted-foreground">Parent ID Tag</h3>
-              <div className="flex items-center gap-2 mt-1">
-                <LinkIcon className="h-4 w-4 text-muted-foreground" />
-                {idTag.parent_idtag ? (
-                  <span>{idTag.parent_idtag}</span>
-                ) : (
-                  <span className="text-muted-foreground">No parent ID tag</span>
-                )}
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-        
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center">
-              <Clock className="mr-2 h-5 w-5" />
-              Activity and History
-            </CardTitle>
-            <CardDescription>Usage and modification history</CardDescription>
-          </CardHeader>
-          
-          <CardContent>
-            <div className="py-8 text-center">
-              <p className="text-muted-foreground">No activity data available yet.</p>
-            </div>
-          </CardContent>
-        </Card>
-      </div>
+            </DetailSection>
+          </div>
+        )}
+      </DetailTemplate>
       
       {/* Delete Confirmation Dialog */}
-      <Dialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Delete ID Tag</DialogTitle>
-            <DialogDescription>
-              Are you sure you want to delete the ID tag "{idTag.idtag}"? This action cannot be undone.
-            </DialogDescription>
-          </DialogHeader>
+      <AlertDialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete ID Tag</AlertDialogTitle>
+            <AlertDialogDescription>
+              Are you sure you want to delete the ID tag "{idTag?.idtag}"? This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
           
           <div className="mt-4">
             <Alert variant="destructive">
@@ -365,13 +447,11 @@ const IdTagDetailPage = () => {
             </Alert>
           </div>
           
-          <DialogFooter className="mt-4">
-            <Button variant="outline" onClick={() => setIsDeleteDialogOpen(false)}>
-              Cancel
-            </Button>
-            <Button 
-              variant="destructive" 
+          <AlertDialogFooter className="mt-4">
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction 
               onClick={handleDelete}
+              className="bg-destructive hover:bg-destructive/90"
               disabled={deleteMutation.isPending}
             >
               {deleteMutation.isPending ? (
@@ -382,57 +462,55 @@ const IdTagDetailPage = () => {
               ) : (
                 'Delete ID Tag'
               )}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
       
       {/* Block/Unblock Confirmation Dialog */}
-      <Dialog open={isBlockDialogOpen} onOpenChange={setIsBlockDialogOpen}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>
-              {idTag.is_blocked ? 'Unblock' : 'Block'} ID Tag
-            </DialogTitle>
-            <DialogDescription>
-              Are you sure you want to {idTag.is_blocked ? 'unblock' : 'block'} the ID tag "{idTag.idtag}"?
-            </DialogDescription>
-          </DialogHeader>
+      <AlertDialog open={isBlockDialogOpen} onOpenChange={setIsBlockDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>
+              {idTag?.is_blocked ? 'Unblock' : 'Block'} ID Tag
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              Are you sure you want to {idTag?.is_blocked ? 'unblock' : 'block'} the ID tag "{idTag?.idtag}"?
+            </AlertDialogDescription>
+          </AlertDialogHeader>
           
           <div className="mt-4">
-            <Alert variant={idTag.is_blocked ? "default" : "destructive"}>
+            <Alert variant={idTag?.is_blocked ? "default" : "destructive"}>
               <AlertCircle className="h-4 w-4" />
               <AlertTitle>Note</AlertTitle>
               <AlertDescription>
-                {idTag.is_blocked
+                {idTag?.is_blocked
                   ? "Unblocking this ID tag will allow it to be used for authentication at charging stations."
                   : "Blocking this ID tag will prevent it from being used for authentication at charging stations."}
               </AlertDescription>
             </Alert>
           </div>
           
-          <DialogFooter className="mt-4">
-            <Button variant="outline" onClick={() => setIsBlockDialogOpen(false)}>
-              Cancel
-            </Button>
-            <Button 
-              variant={idTag.is_blocked ? "default" : "destructive"}
+          <AlertDialogFooter className="mt-4">
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction 
               onClick={handleBlockUnblock}
+              className={idTag?.is_blocked ? "" : "bg-destructive hover:bg-destructive/90"}
               disabled={blockMutation.isPending}
             >
               {blockMutation.isPending ? (
                 <>
                   <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  {idTag.is_blocked ? 'Unblocking...' : 'Blocking...'}
+                  {idTag?.is_blocked ? 'Unblocking...' : 'Blocking...'}
                 </>
               ) : (
-                idTag.is_blocked ? 'Unblock ID Tag' : 'Block ID Tag'
+                idTag?.is_blocked ? 'Unblock ID Tag' : 'Block ID Tag'
               )}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-    </PageLayout>
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+    </>
   );
 };
 

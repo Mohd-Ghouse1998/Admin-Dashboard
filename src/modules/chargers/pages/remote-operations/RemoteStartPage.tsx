@@ -4,8 +4,8 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { useQuery, useMutation } from '@tanstack/react-query';
 import { Helmet } from 'react-helmet-async';
-import { PageLayout } from '@/components/layout/PageLayout';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { CreateTemplate, CreateSectionHeader } from '@/components/templates/create/CreateTemplate';
+import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/components/ui/use-toast';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
@@ -235,37 +235,34 @@ const RemoteStartPage = () => {
     startTransactionMutation.mutate(values);
   };
   
+  // Combine all error messages or create a string error message
+  const errorMessage = chargersError || connectorsError || idTagsError ? 
+    [
+      chargersError instanceof Error ? chargersError.message : '',
+      connectorsError instanceof Error ? connectorsError.message : '',
+      idTagsError instanceof Error ? idTagsError.message : '',
+    ].filter(Boolean).join('\n') || 'Failed to load resources' : null;
+  
   return (
-    <PageLayout
-      title="Remote Start Transaction"
-      description="Start a charging transaction remotely"
+    <CreateTemplate
+      title="Start Transaction"
+      description="Remotely start a charging transaction on a specific charger and connector"
+      icon={<PlayCircle className="h-5 w-5" />}
+      entityName="Transaction"
+      backPath="/chargers/remote-operations"
+      error={errorMessage}
+      isSubmitting={startTransactionMutation.isPending}
+      onSubmit={form.handleSubmit(onSubmit)}
     >
-      <Helmet>
-        <title>Remote Start Transaction | Electric Flow Admin</title>
-      </Helmet>
-      
-      {(chargersError || connectorsError || idTagsError) && (
-        <Alert variant="destructive" className="mb-4">
-          <AlertCircle className="h-4 w-4" />
-          <AlertTitle>Error</AlertTitle>
-          <AlertDescription>
-            {chargersError instanceof Error ? chargersError.message : ''}
-            {connectorsError instanceof Error ? connectorsError.message : ''}
-            {idTagsError instanceof Error ? idTagsError.message : ''}
-          </AlertDescription>
-        </Alert>
-      )}
-      
-      <Card>
-        <CardHeader>
-          <CardTitle>Remote Start Transaction</CardTitle>
-          <CardDescription>
-            Fill in the required information to start a charging transaction remotely
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <Form {...form}>
-            <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
+      <Form {...form}>
+        <div className="space-y-6">
+          <div className="border rounded-md overflow-hidden">
+            <CreateSectionHeader 
+              title="Charger Details" 
+              description="Select the charger and connector for the transaction"
+              icon={<PlayCircle className="h-4 w-4" />}
+            />
+            <div className="p-6 space-y-6">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <FormField
                   control={form.control}
@@ -275,7 +272,7 @@ const RemoteStartPage = () => {
                       <FormLabel>Charger</FormLabel>
                       <Select onValueChange={field.onChange} value={field.value}>
                         <FormControl>
-                          <SelectTrigger>
+                          <SelectTrigger className="h-10 border-border hover:border-primary/20 focus:ring-1 focus:ring-primary/30 focus:border-primary/30">
                             <SelectValue placeholder="Select a charger" />
                           </SelectTrigger>
                         </FormControl>
@@ -315,7 +312,7 @@ const RemoteStartPage = () => {
                         disabled={!selectedChargerId || connectorsLoading}
                       >
                         <FormControl>
-                          <SelectTrigger>
+                          <SelectTrigger className="h-10 border-border hover:border-primary/20 focus:ring-1 focus:ring-primary/30 focus:border-primary/30">
                             <SelectValue placeholder="Select a connector" />
                           </SelectTrigger>
                         </FormControl>
@@ -354,7 +351,7 @@ const RemoteStartPage = () => {
                       <FormLabel>ID Tag</FormLabel>
                       <Select onValueChange={field.onChange} value={field.value}>
                         <FormControl>
-                          <SelectTrigger>
+                          <SelectTrigger className="h-10 border-border hover:border-primary/20 focus:ring-1 focus:ring-primary/30 focus:border-primary/30">
                             <SelectValue placeholder="Select an ID Tag" />
                           </SelectTrigger>
                         </FormControl>
@@ -393,7 +390,7 @@ const RemoteStartPage = () => {
                     <FormItem>
                       <FormLabel>User Limit (Optional)</FormLabel>
                       <FormControl>
-                        <Input {...field} placeholder="Enter limit value" />
+                        <Input {...field} placeholder="Enter limit value" className="h-10 border-border hover:border-primary/20 focus:ring-1 focus:ring-primary/30 focus:border-primary/30" />
                       </FormControl>
                       <FormMessage />
                     </FormItem>
@@ -411,7 +408,7 @@ const RemoteStartPage = () => {
                         value={field.value}
                       >
                         <FormControl>
-                          <SelectTrigger>
+                          <SelectTrigger className="h-10 border-border hover:border-primary/20 focus:ring-1 focus:ring-primary/30 focus:border-primary/30">
                             <SelectValue placeholder="Select limit type" />
                           </SelectTrigger>
                         </FormControl>
@@ -425,31 +422,11 @@ const RemoteStartPage = () => {
                   )}
                 />
               </div>
-              
-              <div className="flex justify-end">
-                <Button 
-                  type="submit" 
-                  disabled={startTransactionMutation.isPending}
-                  className="ml-auto"
-                >
-                  {startTransactionMutation.isPending ? (
-                    <>
-                      <div className="mr-2 h-4 w-4 animate-spin rounded-full border-2 border-background border-t-transparent"></div>
-                      Starting...
-                    </>
-                  ) : (
-                    <>
-                      <PlayCircle className="mr-2 h-4 w-4" />
-                      Start Transaction
-                    </>
-                  )}
-                </Button>
-              </div>
-            </form>
-          </Form>
-        </CardContent>
-      </Card>
-    </PageLayout>
+            </div>
+          </div>
+        </div>
+      </Form>
+    </CreateTemplate>
   );
 };
 

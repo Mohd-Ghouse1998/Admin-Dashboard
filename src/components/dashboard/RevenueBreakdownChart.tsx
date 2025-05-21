@@ -5,9 +5,10 @@ import { PieChart, Pie, Cell, ResponsiveContainer, Legend, Tooltip } from 'recha
 
 interface RevenueBreakdownChartProps {
   isLoading?: boolean;
+  className?: string;
 }
 
-export const RevenueBreakdownChart = ({ isLoading = false }: RevenueBreakdownChartProps) => {
+export const RevenueBreakdownChart = ({ isLoading = false, className = '' }: RevenueBreakdownChartProps) => {
   const [chartData, setChartData] = useState([
     { name: 'Subscription', value: 0, color: '#6366f1' }, // indigo
     { name: 'Pay-As-You-Go', value: 0, color: '#84cc16' }, // lime
@@ -38,12 +39,12 @@ export const RevenueBreakdownChart = ({ isLoading = false }: RevenueBreakdownCha
   }, [isLoading]);
   
   if (isLoading) {
-    return <Skeleton className="h-full w-full" />;
+    return <Skeleton className={`h-full w-full ${className}`} />;
   }
   
   // Format currency
   const formatCurrency = (value: number) => {
-    return new Intl.NumberFormat('en-US', {
+    return new Intl.NumberFormat('en-IN', {
       style: 'currency',
       currency: 'INR',
       minimumFractionDigits: 0,
@@ -52,15 +53,15 @@ export const RevenueBreakdownChart = ({ isLoading = false }: RevenueBreakdownCha
   };
   
   return (
-    <div className="h-full w-full flex flex-col">
-      <div className="flex-1">
+    <div className={`h-full w-full flex flex-col ${className}`}>
+      <div className="flex-1 min-h-[200px]">
         <ResponsiveContainer width="100%" height="100%">
           <PieChart>
             <Pie
               data={chartData}
               cx="50%"
               cy="50%"
-              outerRadius={90}
+              outerRadius={80}
               dataKey="value"
               stroke="#fff"
               strokeWidth={2}
@@ -92,17 +93,20 @@ export const RevenueBreakdownChart = ({ isLoading = false }: RevenueBreakdownCha
                 borderRadius: '0.375rem',
                 backgroundColor: 'rgba(255, 255, 255, 0.9)',
                 boxShadow: '0 1px 2px 0 rgb(0 0 0 / 0.05)',
-                border: '1px solid rgba(229, 231, 235, 1)'
+                border: '1px solid rgba(229, 231, 235, 1)',
+                color: '#374151'
               }}
             />
             <Legend verticalAlign="bottom" height={36} />
           </PieChart>
         </ResponsiveContainer>
       </div>
-      <div className="mt-4 bg-gray-50 dark:bg-gray-800 rounded-lg p-3 text-center">
-        <div className="text-2xl font-semibold text-primary-600">{formatCurrency(totalRevenue)}</div>
+      <div className="mt-4 bg-gray-50 dark:bg-gray-800/50 rounded-lg p-3 text-center shadow-sm">
+        <div className="text-2xl font-semibold text-blue-600 dark:text-blue-400">{formatCurrency(totalRevenue)}</div>
         <div className="text-xs text-gray-500 dark:text-gray-400">Total Monthly Revenue</div>
       </div>
     </div>
   );
 };
+
+export default RevenueBreakdownChart;

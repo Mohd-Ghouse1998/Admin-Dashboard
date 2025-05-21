@@ -7,6 +7,7 @@ import NotFound from "@/modules/common/pages/NotFoundPage";
 import { tenantRoutes } from "./tenantRoutes";
 import { authRoutes } from "./authRoutes";
 import { userRoutes } from "./userRoutes";
+// Modern UI has been integrated into the main components
 import { chargerRoutes } from "./chargerRoutes";
 import { ocpiRoutes } from "./ocpiRoutes";
 import { paymentRoutes } from "./paymentRoutes";
@@ -31,6 +32,7 @@ export const appRoutes = {
       {/* Feature-specific routes */}
       {tenantRoutes}
       {userRoutes}
+      {/* Modern UI routes have been integrated into main components */}
       {chargerRoutes}
       {ocpiRoutes}
       {paymentRoutes}
@@ -48,6 +50,7 @@ export const routes = {
   tenantRoutes,
   authRoutes,
   userRoutes,
+  // modernUsersRoutes has been integrated
   chargerRoutes,
   ocpiRoutes,
   paymentRoutes,
@@ -58,6 +61,7 @@ export const routes = {
 export * from './tenantRoutes';
 export * from './authRoutes';
 export * from './userRoutes';
+// Modern UI has been integrated into main components
 export * from './chargerRoutes';
 export * from './ocpiRoutes';
 export * from './paymentRoutes';

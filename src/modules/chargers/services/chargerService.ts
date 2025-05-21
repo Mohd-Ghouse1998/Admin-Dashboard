@@ -138,17 +138,52 @@ export const chargerApi = {
     
     try {
       const response = await axiosInstance.get(`${OCPP_BASE}/chargers/${id}/`);
-      return response.data;
+      console.log(`Raw API response for charger ${id}:`, response.data);
+      
+      // Handle different possible response formats and normalize them
+      const data = response.data;
+      
+      // If it's a GeoJSON Feature
+      if (data && data.type === 'Feature' && data.properties) {
+        console.log('Detected GeoJSON Feature format, normalizing response');
+        return {
+          ...data.properties,
+          id: data.id || id,
+          feature_id: data.id,
+          feature_type: data.type,
+          geometry: data.geometry
+        };
+      }
+      // If it's a GeoJSON FeatureCollection
+      else if (data && data.features && Array.isArray(data.features) && data.features.length > 0) {
+        console.log('Detected GeoJSON FeatureCollection format, normalizing response');
+        const feature = data.features[0];
+        return {
+          ...(feature.properties || {}),
+          id: feature.id || feature.properties?.id || id,
+          feature_id: feature.id,
+          feature_type: feature.type,
+          geometry: feature.geometry
+        };
+      }
+      // Return as is for other formats
+      return data;
     } catch (error) {
-      return handleApiError(error, "Error fetching charger details");
+      console.error(`Error fetching charger ${id}:`, error);
+      throw error; // Rethrow the error instead of returning it
     }
   },
   
   searchChargers: async (accessToken: string, query: string) => {
     try {
-      const response = await axiosInstance.get(`${OCPP_BASE}/chargers/search/?query=${query}`);
+      // Ensure the query is properly URL encoded
+      const encodedQuery = encodeURIComponent(query.trim());
+      console.log('Searching for chargers with query:', query, 'encoded as:', encodedQuery);
+      const response = await axiosInstance.get(`${OCPP_BASE}/chargers/search/?query=${encodedQuery}`);
+      console.log('Search API response:', response.data);
       return response.data;
     } catch (error) {
+      console.error('Search error:', error);
       return handleApiError(error, "Error searching chargers");
     }
   },

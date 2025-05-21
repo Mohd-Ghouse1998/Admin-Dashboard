@@ -1,15 +1,8 @@
 import React, { useState, useEffect } from 'react';
-import { PageLayout } from '@/components/layout/PageLayout';
-import { 
-  Card, 
-  CardContent, 
-  CardHeader, 
-  CardTitle 
-} from '@/components/ui/card';
-import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
+import { Card } from '@/components/ui/card';
 import { Search, Filter, Plus, Trash2, Edit, Eye, Ban, Zap } from 'lucide-react';
-import { DataTable } from '@/components/ui/data-table';
 import { useChargingSession } from '@/modules/chargers/hooks/useChargingSession';
 import { StatusBadge } from '@/components/ui/status-badge';
 import {
@@ -30,7 +23,9 @@ import {
   AlertDialogFooter,
   AlertDialogHeader,
   AlertDialogTitle,
+  AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
+import { ListTemplate, Column } from '@/components/templates/list/ListTemplate';
 import { format } from 'date-fns';
 
 export const ChargingSessionsListPage = () => {
@@ -45,7 +40,7 @@ export const ChargingSessionsListPage = () => {
   
   // Get Charging Sessions with pagination
   const { getChargingSessions, deleteChargingSession, remoteStopTransaction } = useChargingSession();
-  const { data, isLoading, refetch } = getChargingSessions(currentPage, filters);
+  const { data, isLoading, error, refetch } = getChargingSessions(currentPage, filters);
   
   // Update filters when searchQuery or statusFilter changes
   useEffect(() => {
@@ -137,131 +132,71 @@ export const ChargingSessionsListPage = () => {
     return `${hours}h ${minutes}m`;
   };
 
-  // Define columns for DataTable
-  const columns = [
+  // Define columns for ListTemplate component
+  const columns: Column<any>[] = [
     { 
-      accessorKey: "id",
+      key: "id",
       header: "ID",
     },
     { 
-      accessorKey: "formatted_transaction_id",
+      key: "formatted_transaction_id",
       header: "Transaction ID",
-      cell: (row) => (
-        <Button
-          variant="link"
-          className="p-0 h-auto font-normal text-primary hover:text-primary-focus hover:underline"
-          onClick={() => router.push(`/chargers/charging-sessions/${row.id}`)}
-        >
+      render: (row) => (
+        <span className="font-medium">
           {row.formatted_transaction_id || row.transaction_id}
-        </Button>
+        </span>
       )
     },
     { 
-      accessorKey: "connector",
+      key: "connector",
       header: "Connector",
     },
     { 
-      accessorKey: "status", // Using accessorKey for DataTable to work correctly
+      key: "status",
       header: "Status",
-      cell: (row) => {
+      render: (row) => {
         const isActive = !row.end_time;
         return (
-          <StatusBadge 
-            status={isActive ? 'Active' : 'Completed'} 
-            variant={isActive ? 'info' : 'success'} 
-          />
+          <Badge 
+            className={isActive 
+              ? "bg-blue-50 text-blue-600 border border-blue-100 hover:bg-blue-100" 
+              : "bg-green-50 text-green-600 border border-green-100 hover:bg-green-100"}
+          >
+            {isActive ? 'Active' : 'Completed'}
+          </Badge>
         );
       }
     },
     { 
-      accessorKey: "energy", // Using accessorKey for DataTable to work correctly
+      key: "energy",
       header: "Energy",
-      cell: (row) => calculateEnergy(row)
+      render: (row) => calculateEnergy(row)
     },
     { 
-      accessorKey: "start_time",
+      key: "start_time",
       header: "Start Time",
-      cell: (row) => row.start_time 
+      render: (row) => row.start_time 
         ? format(new Date(row.start_time), 'PPp') 
         : 'N/A'
     },
     { 
-      accessorKey: "end_time",
+      key: "end_time",
       header: "End Time",
-      cell: (row) => row.end_time 
+      render: (row) => row.end_time 
         ? format(new Date(row.end_time), 'PPp') 
         : 'Active'
     },
     { 
-      accessorKey: "duration", // Using accessorKey for DataTable to work correctly
+      key: "duration",
       header: "Duration",
-      cell: (row) => calculateDuration(row)
+      render: (row) => calculateDuration(row)
     },
     { 
-      accessorKey: "cost",
+      key: "cost",
       header: "Cost",
-      cell: (row) => row.cost 
+      render: (row) => row.cost 
         ? `$${row.cost.toFixed(2)}` 
         : 'N/A'
-    },
-    { 
-      accessorKey: "actions", // Using accessorKey for DataTable to work correctly
-      header: "Actions",
-      cell: (row) => {
-        const isActive = !row.end_time;
-        return (
-          <div className="flex space-x-2">
-            <a 
-              href={`/chargers/charging-sessions/${row.id.toString()}`}
-              onClick={(e) => {
-                e.stopPropagation(); // Prevent row click from triggering
-                console.log('Navigating to session detail with ID:', row.id);
-              }}
-            >
-              <Button variant="ghost" size="icon">
-                <Eye className="h-4 w-4" />
-              </Button>
-            </a>
-            <a 
-              href={`/chargers/charging-sessions/${row.id.toString()}/edit`}
-              onClick={(e) => {
-                e.stopPropagation(); // Prevent row click from triggering
-                console.log('Navigating to session edit with ID:', row.id);
-              }}
-            >
-              <Button variant="ghost" size="icon">
-                <Edit className="h-4 w-4" />
-              </Button>
-            </a>
-            {isActive && (
-              <Button 
-                variant="ghost" 
-                size="icon"
-                onClick={(e) => {
-                  e.stopPropagation(); // Prevent row click from triggering
-                  setSessionToStop({
-                    id: row.id,
-                    chargerId: row.charger,
-                    transactionId: row.transaction_id
-                  });
-                }}
-              >
-                <Ban className="h-4 w-4 text-amber-500" />
-              </Button>
-            )}
-            <Button 
-              variant="ghost" 
-              size="icon"
-              onClick={(e) => {
-                e.stopPropagation(); // Prevent row click from triggering
-                setSessionToDelete(row.id);
-              }}
-            >
-              <Trash2 className="h-4 w-4" />
-            </Button>
-          </div>
-        );
-      }
     },
   ];
   
@@ -273,25 +208,42 @@ export const ChargingSessionsListPage = () => {
 
   return (
     <>
-      <PageLayout title="Charging Sessions" description="Manage charging sessions">
-        <Card className="mb-6">
-          <CardContent className="p-4">
-            <div className="flex flex-wrap gap-4">
-              {/* Search */}
-              <div className="relative flex-1 min-w-[200px]">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-500" />
-                <Input 
-                  placeholder="Search by Transaction ID" 
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  className="pl-10"
-                />
+      <div className="space-y-6">
+        <Card className="border border-primary/10 rounded-md overflow-hidden shadow-sm">
+          <ListTemplate
+            title="Charging Sessions"
+            description="Manage all EV charging sessions in one place"
+            icon={<Zap className="h-5 w-5" />}
+            
+            // Data props
+            data={sessions}
+            isLoading={isLoading}
+            error={error}
+            totalItems={totalCount}
+            emptyState={
+              <div className="text-center py-10">
+                <h3 className="text-lg font-medium">No charging sessions found</h3>
+                <p className="text-muted-foreground mt-1">Try adjusting your search or filters</p>
+                <Button 
+                  variant="outline" 
+                  className="mt-4" 
+                  onClick={handleResetFilters}
+                >
+                  Reset Filters
+                </Button>
               </div>
-              
-              {/* Status Filter */}
-              <div className="w-52">
+            }
+            
+            // Search props
+            searchQuery={searchQuery}
+            onSearchChange={setSearchQuery}
+            searchPlaceholder="Search by Transaction ID"
+            
+            // Filtering props
+            filterComponent={
+              <div className="flex items-center gap-3">
                 <Select value={statusFilter} onValueChange={setStatusFilter}>
-                  <SelectTrigger>
+                  <SelectTrigger className="w-52">
                     <SelectValue placeholder="Filter by Status" />
                   </SelectTrigger>
                   <SelectContent>
@@ -300,72 +252,37 @@ export const ChargingSessionsListPage = () => {
                     <SelectItem value="completed">Completed</SelectItem>
                   </SelectContent>
                 </Select>
+                
+                <Button 
+                  variant="outline" 
+                  size="sm" 
+                  onClick={handleResetFilters}
+                  className="h-9"
+                >
+                  <Filter className="mr-2 h-4 w-4" />
+                  Reset
+                </Button>
               </div>
-              
-              {/* Reset Button */}
-              <Button variant="outline" onClick={handleResetFilters}>
-                <Filter className="mr-2 h-4 w-4" />
-                Reset Filters
-              </Button>
-              
-              {/* Create Button */}
-              <Button onClick={() => router.push('/chargers/charging-sessions/create')}>
-                <Plus className="mr-2 h-4 w-4" />
-                Add Session
-              </Button>
-            </div>
-          </CardContent>
-        </Card>
-        
-        <Card>
-          <CardHeader>
-            <CardTitle>Charging Sessions</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <DataTable
-              columns={columns}
-              data={sessions}
-              keyField="id"
-              isLoading={isLoading}
-              onRowClick={(row) => router.push(`/chargers/charging-sessions/${row.id}`)}
-              pagination={{
-                currentPage: currentPage,
-                totalPages: totalPages,
-                totalItems: totalCount,
-                onPageChange: (page) => setCurrentPage(page),
-              }}
-            />
+            }
             
-            {/* Pagination Controls */}
-            {totalPages > 1 && (
-              <div className="flex justify-between items-center mt-4">
-                <div className="text-sm text-gray-500">
-                  Showing {sessions.length} of {totalCount} sessions
-                </div>
-                <div className="flex space-x-2">
-                  <Button 
-                    variant="outline" 
-                    onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
-                    disabled={currentPage === 1}
-                  >
-                    Previous
-                  </Button>
-                  <Button 
-                    variant="outline" 
-                    onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
-                    disabled={currentPage === totalPages}
-                  >
-                    Next
-                  </Button>
-                </div>
-                <div className="text-sm text-gray-500">
-                  Page {currentPage} of {totalPages}
-                </div>
-              </div>
-            )}
-          </CardContent>
+            // Columns and rendering
+            columns={columns}
+            onRowClick={(row) => router.push(`/chargers/charging-sessions/${row.id}`)}
+            actionBarClassName="p-4 bg-gray-50 border-b border-primary/10"
+            
+            // Create options
+            createPath="/chargers/charging-sessions/create"
+            createButtonText="Add Session"
+            
+            // Pagination
+            currentPage={currentPage}
+            totalPages={totalPages}
+            pageSize={10}
+            onPageChange={setCurrentPage}
+            className="border-none shadow-none"
+          />
         </Card>
-      </PageLayout>
+      </div>
 
       {/* Delete Confirmation Dialog */}
       <AlertDialog open={!!sessionToDelete} onOpenChange={() => setSessionToDelete(null)}>

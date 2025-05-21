@@ -1,38 +1,60 @@
 
 import React from 'react';
-import { Helmet } from 'react-helmet-async';
 import { useNavigate } from 'react-router-dom';
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm } from "react-hook-form";
 import * as z from "zod";
-import { PageLayout } from '@/components/layout/PageLayout';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
-import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Card, CardContent } from '@/components/ui/card';
-import { AlertCircle, Save } from 'lucide-react';
+import { Card, CardContent } from "@/components/ui/card";
+import { Separator } from "@/components/ui/separator";
+import { Badge } from "@/components/ui/badge";
+import { 
+  AlertCircle, User, UsersRound, Mail, KeyRound, PhoneCall, 
+  MapPin, Globe, Shield, Building, Home, Info
+} from 'lucide-react';
 import { useMutation, useQuery } from '@tanstack/react-query';
 import { useAuth } from '@/hooks/useAuth';
 import { userService } from '@/modules/users/services/userService';
 import { useToast } from '@/hooks/use-toast';
-import FormSection from '@/components/common/FormSection';
+import { CreateTemplate } from '@/components/templates/create/CreateTemplate';
+import { DetailSection } from '@/components/templates/detail/DetailTemplate';
 
 // Form schema validation
 const formSchema = z.object({
   user: z.string({
     required_error: "User is required",
   }),
-  email: z.string().email("Invalid email address").optional().or(z.literal('')),
+  // User information
+  first_name: z.string().min(1, "First name is required"),
+  last_name: z.string().min(1, "Last name is required"),
+  email: z.string().email("Invalid email address"),
+  password: z.string()
+    .min(8, "Password must be at least 8 characters")
+    .regex(/[A-Z]/, "Password must contain at least one uppercase letter")
+    .regex(/[a-z]/, "Password must contain at least one lowercase letter")
+    .regex(/[0-9]/, "Password must contain at least one number")
+    .regex(/[^A-Za-z0-9]/, "Password must contain at least one special character"),
+  password_confirm: z.string(),
+  
+  // Profile information
   phone_number: z.string().optional().or(z.literal('')),
   address: z.string().optional().or(z.literal('')),
   city: z.string().optional().or(z.literal('')),
   state: z.string().optional().or(z.literal('')),
   country: z.string().optional().or(z.literal('')),
-  postal_code: z.string().optional().or(z.literal('')),
-  bio: z.string().optional().or(z.literal('')),
+  pin: z.string().optional().or(z.literal('')),  // Changed from postal_code to match backend
+  
+  // OCPI fields
+  ocpi_party_id: z.string().optional().or(z.literal('')),
+  ocpi_role: z.string().optional().or(z.literal('')),
+  ocpi_token: z.string().optional().or(z.literal('')),
+}).refine((data) => data.password === data.password_confirm, {
+  message: "Passwords do not match",
+  path: ["password_confirm"],
 });
 
 const ProfileCreatePage = () => {
@@ -40,26 +62,34 @@ const ProfileCreatePage = () => {
   const { toast } = useToast();
   const navigate = useNavigate();
   
-  // Fetch users for the user dropdown
-  const { data: users, isLoading: isLoadingUsers, error: usersError } = useQuery({
+  const { data: usersResponse, isLoading: isLoadingUsers, error: usersError } = useQuery({
     queryKey: ['users'],
-    queryFn: () => userService.getUsers(accessToken),
+    queryFn: () => userService.getUsers(),
     enabled: !!accessToken,
   });
+  
+  // Extract users from the paginated response
+  const users = usersResponse?.results; // Access the results array directly
   
   // Form definition
   const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),
     defaultValues: {
       user: "",
+      first_name: "",
+      last_name: "",
       email: "",
+      password: "",
+      password_confirm: "",
       phone_number: "",
       address: "",
       city: "",
       state: "",
       country: "",
-      postal_code: "",
-      bio: "",
+      pin: "",
+      ocpi_party_id: "",
+      ocpi_role: "",
+      ocpi_token: "",
     },
   });
 
@@ -90,210 +120,341 @@ const ProfileCreatePage = () => {
   const onSubmit = (values: z.infer<typeof formSchema>) => {
     createProfileMutation.mutate(values);
   };
+  
+  // Handle form submission for the CreateTemplate
+  const handleFormSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    form.handleSubmit(onSubmit)(e);
+  };
 
   return (
-    <PageLayout
-      title="Create Profile"
-      description="Create a new user profile"
-      backButton
-      backTo="/users/profiles"
+    <CreateTemplate
+      title="Create New Profile"
+      description="Create a new user profile with associated account details"
+      icon={<User className="h-5 w-5" />}
+      entityName="Profile"
+      onSubmit={handleFormSubmit}
+      isSubmitting={createProfileMutation.isPending}
+      error={createProfileMutation.error ? "Error creating profile" : null}
+      backPath="/users/profiles"
+      className="max-w-full container-fluid px-6" // Override container class to use full width
     >
-      <Helmet>
-        <title>Create Profile | Admin Dashboard</title>
-      </Helmet>
-      
-      {usersError && (
-        <Alert variant="destructive" className="mb-4">
-          <AlertCircle className="h-4 w-4" />
-          <AlertTitle>Error</AlertTitle>
-          <AlertDescription>
-            {usersError instanceof Error ? usersError.message : 'Failed to load users data'}
-          </AlertDescription>
-        </Alert>
-      )}
-
       <Form {...form}>
-        <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
-          <FormSection title="User Information" className="mb-6">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <FormField
-                control={form.control}
-                name="user"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>User <span className="text-red-500">*</span></FormLabel>
-                    <Select 
-                      disabled={isLoadingUsers} 
-                      onValueChange={field.onChange} 
-                      defaultValue={field.value}
-                    >
-                      <FormControl>
-                        <SelectTrigger>
-                          <SelectValue placeholder="Select user" />
-                        </SelectTrigger>
-                      </FormControl>
-                      <SelectContent>
-                        {isLoadingUsers ? (
-                          <SelectItem value="loading" disabled>Loading users...</SelectItem>
-                        ) : users?.results ? (
-                          users.results.map((user: any) => (
+        <div className="space-y-8">
+          {/* User Account Section */}
+          <Card className="overflow-hidden border-primary/10">
+            <div className="bg-gradient-to-r from-primary/5 to-primary/10 py-3 px-6 border-b border-primary/10">
+              <h3 className="font-medium flex items-center gap-2">
+                <UsersRound className="h-4 w-4 text-primary" />
+                User Account
+              </h3>
+              <p className="text-xs text-muted-foreground mt-1">Associate this profile with a user account</p>
+            </div>
+            <CardContent className="p-6">
+              <div className="grid grid-cols-1 gap-6">
+                <FormField
+                  control={form.control}
+                  name="user"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>User Account</FormLabel>
+                      <Select 
+                        onValueChange={field.onChange}
+                        defaultValue={field.value}
+                        disabled={!users || !Array.isArray(users) || users.length === 0}
+                      >
+                        <FormControl>
+                          <SelectTrigger>
+                            <SelectValue placeholder="Select a user" />
+                          </SelectTrigger>
+                        </FormControl>
+                        <SelectContent>
+                          {users && users.map((user) => (
                             <SelectItem key={user.id} value={user.id.toString()}>
-                              {user.username || user.email}
+                              {user.username} ({user.email})
                             </SelectItem>
-                          ))
-                        ) : (
-                          <SelectItem value="none" disabled>No users available</SelectItem>
-                        )}
-                      </SelectContent>
-                    </Select>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              
-              <FormField
-                control={form.control}
-                name="email"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Email</FormLabel>
-                    <FormControl>
-                      <Input placeholder="user@example.com" {...field} />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              </div>
+            </CardContent>
+          </Card>
 
-              <FormField
-                control={form.control}
-                name="phone_number"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Phone Number</FormLabel>
-                    <FormControl>
-                      <Input placeholder="+1 (555) 123-4567" {...field} />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
+          {/* Account Information Section */}
+          <Card className="overflow-hidden border-primary/10">
+            <div className="bg-gradient-to-r from-primary/5 to-primary/10 py-3 px-6 border-b border-primary/10">
+              <h3 className="font-medium flex items-center gap-2">
+                <Info className="h-4 w-4 text-primary" />
+                Account Information
+              </h3>
+              <p className="text-xs text-muted-foreground mt-1">Basic account information</p>
             </div>
-          </FormSection>
+            <CardContent className="p-6">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <FormField
+                  control={form.control}
+                  name="first_name"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>First Name</FormLabel>
+                      <FormControl>
+                        <Input placeholder="John" {...field} />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                
+                <FormField
+                  control={form.control}
+                  name="last_name"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Last Name</FormLabel>
+                      <FormControl>
+                        <Input placeholder="Doe" {...field} />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                
+                <FormField
+                  control={form.control}
+                  name="email"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel className="flex items-center gap-1.5">
+                        <Mail className="h-3.5 w-3.5 text-muted-foreground" />
+                        Email
+                      </FormLabel>
+                      <FormControl>
+                        <Input placeholder="john.doe@example.com" type="email" {...field} />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                
+                <FormField
+                  control={form.control}
+                  name="phone_number"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel className="flex items-center gap-1.5">
+                        <PhoneCall className="h-3.5 w-3.5 text-muted-foreground" />
+                        Phone Number
+                      </FormLabel>
+                      <FormControl>
+                        <Input placeholder="+1 (555) 123-4567" {...field} />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                
+                <div className="md:col-span-2">
+                  <Separator className="my-2" />
+                  <div className="text-sm font-medium mt-4 mb-2 text-primary flex items-center gap-1.5">
+                    <KeyRound className="h-3.5 w-3.5" />
+                    Security Details
+                  </div>
+                </div>
+                
+                <FormField
+                  control={form.control}
+                  name="password"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Password</FormLabel>
+                      <FormControl>
+                        <Input placeholder="••••••••" type="password" {...field} />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                
+                <FormField
+                  control={form.control}
+                  name="password_confirm"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Confirm Password</FormLabel>
+                      <FormControl>
+                        <Input placeholder="••••••••" type="password" {...field} />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              </div>
+            </CardContent>
+          </Card>
           
-          <FormSection title="Address Information" className="mb-6">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <FormField
-                control={form.control}
-                name="address"
-                render={({ field }) => (
-                  <FormItem className="md:col-span-2">
-                    <FormLabel>Address</FormLabel>
-                    <FormControl>
-                      <Input placeholder="123 Main St" {...field} />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              
-              <FormField
-                control={form.control}
-                name="city"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>City</FormLabel>
-                    <FormControl>
-                      <Input placeholder="New York" {...field} />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-
-              <FormField
-                control={form.control}
-                name="state"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>State/Province</FormLabel>
-                    <FormControl>
-                      <Input placeholder="NY" {...field} />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-
-              <FormField
-                control={form.control}
-                name="country"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Country</FormLabel>
-                    <FormControl>
-                      <Input placeholder="USA" {...field} />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-
-              <FormField
-                control={form.control}
-                name="postal_code"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Postal/Zip Code</FormLabel>
-                    <FormControl>
-                      <Input placeholder="10001" {...field} />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
+          {/* Address Information Section */}
+          <Card className="overflow-hidden border-primary/10">
+            <div className="bg-gradient-to-r from-primary/5 to-primary/10 py-3 px-6 border-b border-primary/10">
+              <h3 className="font-medium flex items-center gap-2">
+                <MapPin className="h-4 w-4 text-primary" />
+                Address Information
+              </h3>
+              <p className="text-xs text-muted-foreground mt-1">User location details (optional)</p>
             </div>
-          </FormSection>
+            <CardContent className="p-6">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <FormField
+                  control={form.control}
+                  name="address"
+                  render={({ field }) => (
+                    <FormItem className="md:col-span-2">
+                      <FormLabel className="flex items-center gap-1.5">
+                        <Home className="h-3.5 w-3.5 text-muted-foreground" />
+                        Street Address
+                      </FormLabel>
+                      <FormControl>
+                        <Textarea placeholder="123 Main St" {...field} />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                
+                <FormField
+                  control={form.control}
+                  name="city"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>City</FormLabel>
+                      <FormControl>
+                        <Input placeholder="New York" {...field} />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                <FormField
+                  control={form.control}
+                  name="state"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>State/Province</FormLabel>
+                      <FormControl>
+                        <Input placeholder="NY" {...field} />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                <FormField
+                  control={form.control}
+                  name="country"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Country</FormLabel>
+                      <FormControl>
+                        <Input placeholder="USA" {...field} />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                <FormField
+                  control={form.control}
+                  name="pin"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>PIN Code</FormLabel>
+                      <FormControl>
+                        <Input placeholder="110001" {...field} />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              </div>
+            </CardContent>
+          </Card>
           
-          <FormSection title="Additional Information" className="mb-6">
-            <FormField
-              control={form.control}
-              name="bio"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Bio</FormLabel>
-                  <FormControl>
-                    <Textarea 
-                      placeholder="Tell us about yourself" 
-                      className="min-h-32" 
-                      {...field} 
-                    />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-          </FormSection>
-          
-          <div className="flex justify-end">
-            <Button 
-              type="submit" 
-              disabled={createProfileMutation.isPending}
-              className="min-w-32"
-            >
-              {createProfileMutation.isPending ? (
-                <>Creating profile...</>
-              ) : (
-                <>
-                  <Save className="h-4 w-4 mr-2" />
-                  Create Profile
-                </>
-              )}
-            </Button>
-          </div>
-        </form>
+          {/* OCPI Information Section */}
+          <Card className="overflow-hidden border-primary/10">
+            <div className="bg-gradient-to-r from-primary/5 to-primary/10 py-3 px-6 border-b border-primary/10">
+              <h3 className="font-medium flex items-center gap-2">
+                <Globe className="h-4 w-4 text-primary" />
+                OCPI Information
+              </h3>
+              <p className="text-xs text-muted-foreground mt-1">Open Charge Point Interface details (optional)</p>
+            </div>
+            <CardContent className="p-6">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <FormField
+                  control={form.control}
+                  name="ocpi_party_id"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel className="flex items-center gap-1.5">
+                        <Shield className="h-3.5 w-3.5 text-muted-foreground" />
+                        OCPI Party ID
+                      </FormLabel>
+                      <FormControl>
+                        <Input placeholder="ocpi123456" {...field} />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                
+                <FormField
+                  control={form.control}
+                  name="ocpi_role"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>OCPI Role</FormLabel>
+                      <Select 
+                        onValueChange={field.onChange}
+                        defaultValue={field.value}
+                      >
+                        <FormControl>
+                          <SelectTrigger>
+                            <SelectValue placeholder="Select a role" />
+                          </SelectTrigger>
+                        </FormControl>
+                        <SelectContent>
+                          <SelectItem value="CPO">CPO</SelectItem>
+                          <SelectItem value="eMSP">eMSP</SelectItem>
+                        </SelectContent>
+                      </Select>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                
+                <FormField
+                  control={form.control}
+                  name="ocpi_token"
+                  render={({ field }) => (
+                    <FormItem className="md:col-span-2">
+                      <FormLabel>OCPI Token</FormLabel>
+                      <FormControl>
+                        <Input placeholder="token1234567" {...field} />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              </div>
+            </CardContent>
+          </Card>
+        </div>
       </Form>
-    </PageLayout>
+    </CreateTemplate>
   );
 };
 

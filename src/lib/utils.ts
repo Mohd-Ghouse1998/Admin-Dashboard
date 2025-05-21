@@ -65,3 +65,20 @@ export function truncateText(text: string, maxLength: number = 100): string {
   }
   return text;
 }
+
+/**
+ * Extracts initials from a name
+ * @param name Full name to extract initials from
+ * @returns Initials (up to 2 characters)
+ */
+export function getInitials(name: string): string {
+  if (!name) return '';
+  
+  // Split the name by spaces and get the first 2 parts
+  const parts = name.trim().split(/\s+/).slice(0, 2);
+  
+  // Get the first character of each part and join them
+  return parts
+    .map(part => part.charAt(0).toUpperCase())
+    .join('');
+}

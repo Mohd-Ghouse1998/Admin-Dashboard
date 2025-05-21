@@ -1,7 +1,6 @@
-import React, { useEffect, useState } from 'react';
+import React, { useState } from 'react';
 import { Helmet } from 'react-helmet-async';
 import { Link, useParams, useNavigate } from 'react-router-dom';
-import { PageLayout } from '@/components/layout/PageLayout';
 import { 
   AlertCircle, 
   Edit, 
@@ -13,7 +12,6 @@ import {
   Settings, 
   Server, 
   Battery, 
-  Trash2, 
   ArrowUpDown,
   ExternalLink,
   PlayCircle,
@@ -21,6 +19,8 @@ import {
   Loader2
 } from 'lucide-react';
 import { useChargers } from '@/modules/chargers/hooks/useChargers';
+import { useQuery } from '@tanstack/react-query';
+import { useAuth } from '@/hooks/useAuth';
 import { format } from 'date-fns';
 
 // UI Components
@@ -42,92 +42,72 @@ import {
   DialogDescription,
   DialogFooter,
   DialogHeader,
-  DialogTitle,
-  DialogTrigger,
+  DialogTitle
 } from '@/components/ui/dialog';
+import { DetailTemplate } from '@/components/templates/detail/DetailTemplate';
+import { DetailSection } from '@/components/templates/detail/DetailSection';
 
 const ChargerDetailPage = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
-  const { getCharger, deleteCharger } = useChargers();
-  
-  const [charger, setCharger] = useState<any>(null);
-  const [isLoading, setIsLoading] = useState(true);
-  const [error, setError] = useState<Error | null>(null);
+  const { accessToken } = useAuth();
+  const { deleteCharger } = useChargers();
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
   
-  useEffect(() => {
-    const fetchChargerDetails = async () => {
-      if (!id) return;
+  // Use React Query to fetch the charger details
+  const { 
+    data: charger, 
+    isLoading, 
+    error 
+  } = useQuery({
+    queryKey: ['charger', id],
+    queryFn: async () => {
+      if (!id) throw new Error('Charger ID is missing');
+      
+      console.log('Fetching charger with ID:', id);
       
       try {
-        setIsLoading(true);
-        const response = await getCharger(id);
+        // Import the charger service directly to avoid using the hook function
+        const { chargerApi } = await import('@/modules/chargers/services/chargerService');
+        const response = await chargerApi.getCharger(accessToken, id);
         
-        // Add detailed console logs to debug the response structure
-        console.log('Charger API response:', response);
+        // Add detailed console logs for debugging
+        console.log('Charger API raw response:', response);
+        console.log('Response type:', typeof response);
+        console.log('Response keys:', response ? Object.keys(response) : 'No keys');
         
-        // Handle different possible response formats
-        let processedData = null;
-        
-        // Case 1: GeoJSON Feature format (as shown in the sample response)
-        if (response && response.type === 'Feature' && response.properties) {
-          console.log('Processing GeoJSON Feature');
-          // For GeoJSON Feature, we need to extract from properties and maintain top-level IDs
-          processedData = {
-            // Copy all properties from the properties object
+        // Handle different response formats
+        if (response?.type === 'Feature' && response?.properties) {
+          console.log('Normalizing GeoJSON Feature');
+          return {
             ...response.properties,
-            // Keep the top-level fields for reference
-            feature_id: response.id,
-            feature_type: response.type,
-            geometry: response.geometry,
-            // Make sure type is available at top-level
-            type: response.properties.type || 'Unknown'
+            id: response.id || id,
+            geometry: response.geometry
           };
-          console.log('Processed charger data:', processedData);
-        } 
-        // Case 2: Direct object with properties already flattened
-        else if (response && typeof response === 'object' && response.id) {
-          console.log('Processing direct object');
-          processedData = response;
-        }
-        // Case 3: GeoJSON FeatureCollection with features array
-        else if (response && response.features && Array.isArray(response.features) && response.features.length > 0) {
-          console.log('Processing FeatureCollection');
+        } else if (response?.features && Array.isArray(response.features) && response.features.length > 0) {
+          console.log('Normalizing GeoJSON FeatureCollection');
           const feature = response.features[0];
-          processedData = {
+          return {
             ...feature.properties,
-            feature_id: feature.id || id,
-            feature_type: feature.type,
-            geometry: feature.geometry,
-            type: feature.properties.type || 'Unknown'
+            id: feature.id || id,
+            geometry: feature.geometry
           };
         }
-        // Case 4: Raw data without proper structure
-        else {
-          console.log('Processing raw data');
-          processedData = response;
-        }
         
-        if (processedData) {
-          console.log('Final processed charger data:', processedData);
-          setCharger(processedData);
-        } else {
-          console.error('Could not process charger data from response:', response);
-          setError(new Error('Could not process charger data from response'));
-        }
-        
-        setIsLoading(false);
+        return response;
       } catch (err) {
         console.error('Error fetching charger details:', err);
-        setError(err instanceof Error ? err : new Error('Failed to load charger details'));
-        setIsLoading(false);
+        throw err instanceof Error ? err : new Error('Failed to load charger details');
       }
-    };
-    
-    fetchChargerDetails();
-  }, [id, getCharger]);
+    },
+    // Only refetch when id or accessToken changes
+    refetchOnWindowFocus: false,
+    staleTime: 30000, // 30 seconds
+    // Enable the query only when we have an id
+    enabled: !!id
+  });
   
+  // Handle charger deletion
   const handleDelete = async () => {
     if (!id) return;
     
@@ -136,371 +116,513 @@ const ChargerDetailPage = () => {
       navigate('/chargers');
     } catch (err) {
       console.error('Error deleting charger:', err);
-      // You could show an error toast here
     }
+    setShowDeleteDialog(false);
   };
   
-  if (isLoading) {
-    return (
-      <PageLayout
-        title="Loading Charger Details"
-        description="Please wait..."
-        backButton
-        backTo="/chargers"
-      >
-        <div className="flex items-center justify-center py-24">
-          <Loader2 className="h-8 w-8 animate-spin text-primary" />
-          <span className="ml-3 text-lg">Loading charger information...</span>
-        </div>
-      </PageLayout>
-    );
+  // Safe property access with defaults
+  const chargerName = charger?.name || charger?.charger_id || 'Unnamed Charger';
+  const chargerAddress = charger?.address || 'No address available';
+  const chargerVendor = charger?.vendor || 'Unknown Vendor';
+  const chargerModel = charger?.model || 'Unknown Model';
+  const chargerType = charger?.type || 'Unknown Type';
+  const chargerPrice = charger?.price_per_kwh ? `₹${charger.price_per_kwh}/kWh` : 'Not set';
+  
+  // Connection status
+  const isOnline = charger?.online === true;
+  const isEnabled = charger?.enabled === true;
+  const isVerified = charger?.verified === true;
+  
+  // Status indicators
+  const connectionStatus = isOnline ? 'Online' : 'Offline';
+  const statusVariant = isOnline ? 'success' : 'danger';
+  const enabledStatus = isEnabled ? 'Enabled' : 'Disabled';
+  const enabledVariant = isEnabled ? 'success' : 'warning';
+  const verifiedStatus = isVerified ? 'Verified' : 'Unverified';
+  const verifiedVariant = isVerified ? 'success' : 'neutral';
+  
+  // Format timestamp or use default
+  let lastHeartbeat = 'Never';
+  try {
+    if (charger?.last_heartbeat) {
+      lastHeartbeat = format(new Date(charger.last_heartbeat), 'PPpp');
+    }
+  } catch (err) {
+    console.error('Error formatting last_heartbeat:', err);
   }
   
-  if (error) {
-    return (
-      <PageLayout
-        title="Error Loading Charger"
-        description="There was a problem retrieving charger details"
-        backButton
-        backTo="/chargers"
+  // Actions array for the detail template
+  const detailActions = [
+    {
+      label: 'Remote Start',
+      icon: <PlayCircle className="h-4 w-4" />,
+      onClick: () => alert('Remote Start functionality not implemented yet'),
+      variant: 'outline' as const,
+    },
+    {
+      label: 'Remote Stop',
+      icon: <StopCircle className="h-4 w-4" />,
+      onClick: () => alert('Remote Stop functionality not implemented yet'),
+      variant: 'outline' as const,
+    },
+  ];
+  
+  // Create Overview section content
+  const overviewContent = (
+    <div className="space-y-6">
+      {/* Overview Section */}
+      <DetailSection
+        title="Overview"
+        description="Basic charger information"
+        icon={<Zap className="h-5 w-5" />}
       >
-        <Alert variant="destructive" className="mt-4">
-          <AlertCircle className="h-4 w-4" />
-          <AlertTitle>Error</AlertTitle>
-          <AlertDescription>{error.message}</AlertDescription>
-        </Alert>
-        
-        <div className="mt-8 flex justify-center">
-          <Button onClick={() => window.location.reload()}>Retry</Button>
-        </div>
-      </PageLayout>
-    );
-  }
-  
-  if (!charger) {
-    return (
-      <PageLayout
-        title="Charger Not Found"
-        description="The requested charger could not be found"
-        backButton
-        backTo="/chargers"
-      >
-        <div className="py-12 text-center">
-          <p className="text-muted-foreground">This charger may have been deleted or does not exist.</p>
-          <Button asChild className="mt-4">
-            <Link to="/chargers">Return to Charger List</Link>
-          </Button>
-        </div>
-      </PageLayout>
-    );
-  }
-  
-  // Determine status badges and styling with null checks for all properties
-  const statusVariant = (charger.online === true) 
-    ? 'success' 
-    : 'danger';
-  
-  const connectionStatus = (charger.online === true) 
-    ? 'Online' 
-    : 'Offline';
-  
-  const enabledStatus = (charger.enabled === true) 
-    ? 'Enabled' 
-    : 'Disabled';
-  
-  const enabledVariant = (charger.enabled === true) 
-    ? 'success' 
-    : 'warning';
-  
-  const verifiedStatus = (charger.verified === true) 
-    ? 'Verified' 
-    : 'Unverified';
-  
-  const verifiedVariant = (charger.verified === true) 
-    ? 'success' 
-    : 'neutral';
-  
-  const lastHeartbeat = charger.last_heartbeat 
-    ? format(new Date(charger.last_heartbeat), 'PPpp')
-    : 'Never';
-    
-  return (
-    <PageLayout
-      title={charger.name || `Charger ${charger.charger_id || 'Unknown'}`}
-      description={charger.address || 'EV Charging Station'}
-      backButton
-      backTo="/chargers"
-      actions={
-        <div className="flex items-center gap-2">
-          <Button variant="outline" asChild>
-            <Link to={`/chargers/${id}/edit`}>
-              <Edit className="mr-2 h-4 w-4" />
-              Edit
-            </Link>
-          </Button>
+        <div className="space-y-4">
+          <div>
+            <h3 className="text-sm font-medium text-muted-foreground">Status</h3>
+            <div className="mt-1 flex items-center gap-2">
+              <StatusBadge status={connectionStatus} variant={statusVariant} />
+              <span className="text-sm text-muted-foreground">
+                Last heartbeat: {lastHeartbeat}
+              </span>
+            </div>
+          </div>
           
-          {charger.enabled ? (
-            <Button variant="outline">
-              <StopCircle className="mr-2 h-4 w-4" />
-              Disable
-            </Button>
-          ) : (
-            <Button variant="outline">
-              <PlayCircle className="mr-2 h-4 w-4" />
-              Enable
-            </Button>
-          )}
+          <Separator />
           
-          <Button variant="destructive" onClick={() => setShowDeleteDialog(true)}>
-            <Trash2 className="mr-2 h-4 w-4" />
-            Delete
-          </Button>
+          <div>
+            <h3 className="text-sm font-medium text-muted-foreground">Charger Type</h3>
+            <p className="text-lg">{chargerType}</p>
+            <p className="text-sm text-muted-foreground mt-1">
+              Price: {chargerPrice}
+            </p>
+          </div>
+          
+          <Separator />
+          
+          <div>
+            <h3 className="text-sm font-medium text-muted-foreground">Hardware</h3>
+            <p className="text-lg">{chargerModel}</p>
+            <p className="text-sm text-muted-foreground mt-1">
+              Vendor: {chargerVendor}
+            </p>
+          </div>
+          
+          <Separator />
+          
+          <div>
+            <h3 className="text-sm font-medium text-muted-foreground">Operational Status</h3>
+            <div className="mt-1 flex items-center gap-2">
+              <StatusBadge status={enabledStatus} variant={enabledVariant} />
+              <StatusBadge status={verifiedStatus} variant={verifiedVariant} />
+            </div>
+          </div>
         </div>
-      }
-    >
-      <Helmet>
-        <title>{charger.name || `Charger ${charger.charger_id || 'Unknown'}`} | Electric Flow Admin Portal</title>
-      </Helmet>
+      </DetailSection>
       
-      <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-        {/* Basic Information Card */}
-        <Card className="md:col-span-2 lg:col-span-2">
-          <CardHeader>
-            <CardTitle className="flex items-center">
-              <Zap className="mr-2 h-5 w-5" />
-              Basic Information
-            </CardTitle>
-          </CardHeader>
+      {/* Location Section */}
+      <DetailSection
+        title="Location"
+        description="Geographic information"
+        icon={<MapPin className="h-5 w-5" />}
+      >
+        <div className="space-y-4">
+          <div>
+            <h3 className="text-sm font-medium text-muted-foreground">Address</h3>
+            <p className="text-lg">{chargerAddress}</p>
+          </div>
           
-          <CardContent>
-            <div className="grid gap-4 sm:grid-cols-2">
-              <div>
-                <h3 className="text-sm font-medium text-muted-foreground">Charger ID</h3>
-                <p className="text-lg font-semibold">{charger.charger_id || 'Unknown'}</p>
-              </div>
-              
-              <div>
-                <h3 className="text-sm font-medium text-muted-foreground">Type</h3>
-                <div className="flex items-center">
-                  <Badge variant="outline">{charger.type || 'Unknown'}</Badge>
+          <Separator />
+          
+          {charger?.geometry && charger.geometry.coordinates && Array.isArray(charger.geometry.coordinates) && charger.geometry.coordinates.length >= 2 ? (
+            <div>
+              <h3 className="text-sm font-medium text-muted-foreground">Coordinates</h3>
+              <div className="mt-1">
+                <p>Latitude: {charger.geometry.coordinates[1]}</p>
+                <p>Longitude: {charger.geometry.coordinates[0]}</p>
+                <div className="mt-2">
+                  <Button variant="outline" size="sm" asChild>
+                    <a 
+                      href={`https://maps.google.com/?q=${charger.geometry.coordinates[1]},${charger.geometry.coordinates[0]}`} 
+                      target="_blank" 
+                      rel="noopener noreferrer"
+                    >
+                      <MapPin className="mr-2 h-4 w-4" /> View on Map
+                    </a>
+                  </Button>
                 </div>
-              </div>
-              
-              <div>
-                <h3 className="text-sm font-medium text-muted-foreground">Vendor</h3>
-                <p className="text-lg">
-                  {charger.vendor ? charger.vendor : 'Not specified'}
-                </p>
-              </div>
-              
-              <div>
-                <h3 className="text-sm font-medium text-muted-foreground">Model</h3>
-                <p className="text-lg">
-                  {charger.model ? charger.model : 'Not specified'}
-                </p>
-              </div>
-              
-              <div>
-                <h3 className="text-sm font-medium text-muted-foreground">Price per kWh</h3>
-                <p className="text-lg font-semibold">
-                  {charger.price_per_kwh !== undefined && charger.price_per_kwh !== null 
-                    ? `₹${Number(charger.price_per_kwh).toFixed(2)}` 
-                    : 'Not specified'}
-                </p>
-              </div>
-              
-              <div>
-                <h3 className="text-sm font-medium text-muted-foreground">Last Heartbeat</h3>
-                <p className="text-lg">{lastHeartbeat}</p>
               </div>
             </div>
-          </CardContent>
-        </Card>
-        
-        {/* Status Card */}
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center">
-              <Server className="mr-2 h-5 w-5" />
-              Status
-            </CardTitle>
-          </CardHeader>
-          
-          <CardContent>
-            <div className="space-y-4">
-              <div>
-                <h3 className="text-sm font-medium text-muted-foreground">Connection</h3>
-                <div className="mt-1 flex items-center gap-2">
-                  <StatusBadge status={connectionStatus} variant={statusVariant} />
-                </div>
-              </div>
-              
-              <Separator />
-              
-              <div>
-                <h3 className="text-sm font-medium text-muted-foreground">Last Seen</h3>
-                <p className="text-lg">{lastHeartbeat}</p>
-              </div>
-              
-              <Separator />
-              
-              <div>
-                <h3 className="text-sm font-medium text-muted-foreground">Operational Status</h3>
-                <div className="mt-1 flex items-center gap-2">
-                  <StatusBadge status={enabledStatus} variant={enabledVariant} />
-                  <StatusBadge status={verifiedStatus} variant={verifiedVariant} />
-                </div>
-              </div>
-              
-              <Separator />
-              
-              <div>
-                <h3 className="text-sm font-medium text-muted-foreground">Location</h3>
-                <p className="text-lg">{charger.address || 'Not specified'}</p>
-              </div>
-              
-              <Separator />
-              
-              {charger.geometry && charger.geometry.coordinates && Array.isArray(charger.geometry.coordinates) && charger.geometry.coordinates.length >= 2 ? (
-                <div>
-                  <h3 className="text-sm font-medium text-muted-foreground">Coordinates</h3>
-                  <div className="mt-1">
-                    <p>Latitude: {charger.geometry.coordinates[1]}</p>
-                    <p>Longitude: {charger.geometry.coordinates[0]}</p>
-                    <div className="mt-2">
-                      <Button variant="outline" size="sm" asChild>
-                        <a href={`https://maps.google.com/?q=${charger.geometry.coordinates[1]},${charger.geometry.coordinates[0]}`} target="_blank" rel="noopener noreferrer">
-                          <MapPin className="mr-2 h-4 w-4" /> View on Map
-                        </a>
-                      </Button>
+          ) : (
+            <div>
+              <h3 className="text-sm font-medium text-muted-foreground">Coordinates</h3>
+              <p className="text-muted-foreground">No location data available</p>
+            </div>
+          )}
+        </div>
+      </DetailSection>
+      
+      {/* Connectors Section */}
+      <DetailSection
+        title="Connectors"
+        description="Charging points information"
+        icon={<Plug className="h-5 w-5" />}
+      >
+        {charger?.connectors && charger.connectors.length > 0 ? (
+          <div className="space-y-4">
+            {charger.connectors.map((connector: any, index: number) => (
+              <Card key={connector.id || index} className={index > 0 ? 'mt-4' : ''}>
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-lg flex items-center">
+                    <div 
+                      className="h-3 w-3 rounded-full mr-2" 
+                      style={{ 
+                        backgroundColor: connector.status === 'Available' ? 'green' : 
+                          connector.status === 'Charging' ? 'blue' : 'gray'
+                      }}
+                    />
+                    Connector #{connector.connector_id || index + 1}
+                  </CardTitle>
+                  <CardDescription>
+                    Type: {connector.type || 'Standard'} | Status: {connector.status || 'Unknown'}
+                  </CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <h4 className="text-sm font-medium text-muted-foreground">Max Power</h4>
+                      <p>{connector.max_power ? `${connector.max_power} kW` : 'Not specified'}</p>
+                    </div>
+                    <div>
+                      <h4 className="text-sm font-medium text-muted-foreground">Format</h4>
+                      <p>{connector.format || 'Standard'}</p>
                     </div>
                   </div>
-                </div>
-              ) : (
-                <div>
-                  <h3 className="text-sm font-medium text-muted-foreground">Coordinates</h3>
-                  <p className="text-muted-foreground">No location data available</p>
-                </div>
-              )}
-            </div>
-          </CardContent>
-        </Card>
-        
-        {/* Connectors Card */}
-        <Card className="md:col-span-2 lg:col-span-3">
-          <CardHeader className="flex flex-row items-center justify-between">
-            <div>
-              <CardTitle className="flex items-center">
-                <Plug className="mr-2 h-5 w-5" />
-                Charging Connectors
-              </CardTitle>
-              <CardDescription>Available connector types and status</CardDescription>
-            </div>
-            
-            <Button variant="outline" size="sm" asChild>
-              <Link to={`/chargers/${id}/connectors/add`}>
-                Add Connector
-              </Link>
-            </Button>
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+        ) : (
+          <div className="py-8 text-center">
+            <Plug className="h-12 w-12 text-muted-foreground mx-auto mb-4" strokeWidth={1.5} />
+            <p className="text-muted-foreground">No connectors configured for this charger.</p>
+          </div>
+        )}
+      </DetailSection>
+    </div>
+  );
+
+  // Tab definitions for the detail template
+  const detailTabs = [
+    {
+      label: 'Overview',
+      value: 'overview',
+      icon: <Zap className="h-4 w-4" />,
+      content: overviewContent
+    },
+    {
+      label: 'Events',
+      value: 'events',
+      icon: <Calendar className="h-4 w-4" />,
+      content: (
+        <Card>
+          <CardHeader>
+            <CardTitle>Recent Events</CardTitle>
+            <CardDescription>Latest activities from this charger</CardDescription>
           </CardHeader>
           
           <CardContent>
-            {!charger.connectors || !Array.isArray(charger.connectors) || charger.connectors.length === 0 ? (
-              <div className="py-8 text-center">
-                <p className="text-muted-foreground">No connectors are configured for this charger.</p>
-                <Button asChild className="mt-4" variant="outline">
-                  <Link to={`/chargers/${id}/connectors/add`}>
-                    Add Your First Connector
-                  </Link>
-                </Button>
-              </div>
-            ) : (
-              <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-                {charger.connectors.map((connector: any) => (
-                  <Card key={connector.id || connector.connector_id}>
-                    <CardContent className="p-4">
-                      <div className="flex items-center justify-between">
-                        <div>
-                          <h3 className="font-medium">{connector.type || 'Unknown Type'}</h3>
-                          <p className="text-sm text-muted-foreground">Connector {connector.connector_id}</p>
-                        </div>
-                        
-                        <StatusBadge 
-                          status={connector.status} 
-                          variant={connector.status === 'Available' ? 'success' : 
-                            connector.status === 'Charging' ? 'info' : 'neutral'} 
-                        />
-                        
-                        <Button variant="ghost" size="sm" asChild>
-                          <Link to={`/chargers/${id}/connectors/${connector.id}`}>
-                            <Settings className="h-4 w-4" />
-                          </Link>
-                        </Button>
-                      </div>
-                    </CardContent>
-                  </Card>
-                ))}
-              </div>
-            )}
+            <div className="py-8 text-center">
+              <p className="text-muted-foreground">No events recorded yet.</p>
+            </div>
+          </CardContent>
+        </Card>
+      )
+    },
+    {
+      label: 'Transactions',
+      value: 'transactions',
+      icon: <ArrowUpDown className="h-4 w-4" />,
+      content: (
+        <Card>
+          <CardHeader>
+            <CardTitle>Charging Transactions</CardTitle>
+            <CardDescription>Charging sessions and billing information</CardDescription>
+          </CardHeader>
+          
+          <CardContent>
+            <div className="py-8 text-center">
+              <p className="text-muted-foreground">No transactions recorded yet.</p>
+            </div>
+          </CardContent>
+        </Card>
+      )
+    },
+    {
+      label: 'Logs',
+      value: 'logs',
+      icon: <Server className="h-4 w-4" />,
+      content: (
+        <Card>
+          <CardHeader>
+            <CardTitle>System Logs</CardTitle>
+            <CardDescription>Debug information and system messages</CardDescription>
+          </CardHeader>
+          
+          <CardContent>
+            <div className="py-8 text-center">
+              <p className="text-muted-foreground">No system logs available.</p>
+            </div>
+          </CardContent>
+        </Card>
+      )
+    }
+  ];
+  
+  // Loading state
+  if (isLoading) {
+    return (
+      <div className="container py-8">
+        <div className="mb-4">
+          <Button variant="outline" size="sm" asChild>
+            <Link to="/chargers">
+              <ArrowUpDown className="mr-2 h-4 w-4" /> Back to Chargers
+            </Link>
+          </Button>
+        </div>
+        
+        <Card>
+          <CardContent className="pt-6">
+            <div className="flex flex-col items-center justify-center py-16">
+              <Loader2 className="h-8 w-8 animate-spin text-primary mb-4" />
+              <p className="text-lg font-medium">Loading Charger Details</p>
+              <p className="text-sm text-muted-foreground mt-1">Please wait while we fetch the information</p>
+            </div>
           </CardContent>
         </Card>
       </div>
-      
-      {/* Events and Logs Section - Could be expanded in the future */}
-      <div className="mt-8">
-        <Tabs defaultValue="events">
-          <TabsList>
-            <TabsTrigger value="events">Events</TabsTrigger>
-            <TabsTrigger value="transactions">Transactions</TabsTrigger>
-            <TabsTrigger value="logs">Logs</TabsTrigger>
-          </TabsList>
-          
-          <TabsContent value="events" className="mt-4">
-            <Card>
-              <CardHeader>
-                <CardTitle>Recent Events</CardTitle>
-                <CardDescription>Latest activities from this charger</CardDescription>
-              </CardHeader>
-              
-              <CardContent>
-                <div className="py-8 text-center">
-                  <p className="text-muted-foreground">No events recorded yet.</p>
-                </div>
-              </CardContent>
-            </Card>
-          </TabsContent>
-          
-          <TabsContent value="transactions" className="mt-4">
-            <Card>
-              <CardHeader>
-                <CardTitle>Charging Transactions</CardTitle>
-                <CardDescription>Charging sessions and billing information</CardDescription>
-              </CardHeader>
-              
-              <CardContent>
-                <div className="py-8 text-center">
-                  <p className="text-muted-foreground">No transactions recorded yet.</p>
-                </div>
-              </CardContent>
-            </Card>
-          </TabsContent>
-          
-          <TabsContent value="logs" className="mt-4">
-            <Card>
-              <CardHeader>
-                <CardTitle>System Logs</CardTitle>
-                <CardDescription>Debug information and system messages</CardDescription>
-              </CardHeader>
-              
-              <CardContent>
-                <div className="py-8 text-center">
-                  <p className="text-muted-foreground">No logs available.</p>
-                </div>
-              </CardContent>
-            </Card>
-          </TabsContent>
-        </Tabs>
+    );
+  }
+  
+  // Error state
+  if (error) {
+    return (
+      <div className="container py-8">
+        <div className="mb-4">
+          <Button variant="outline" size="sm" asChild>
+            <Link to="/chargers">
+              <ArrowUpDown className="mr-2 h-4 w-4" /> Back to Chargers
+            </Link>
+          </Button>
+        </div>
+        
+        <Card className="border-destructive">
+          <CardHeader>
+            <CardTitle className="flex items-center text-destructive">
+              <AlertCircle className="mr-2 h-5 w-5" /> Error Loading Charger
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <p>{error.message || 'Failed to load charger details'}</p>
+            <p className="text-sm text-muted-foreground mt-2">
+              Please try refreshing the page or contact support if the problem persists.
+            </p>
+            <Button className="mt-4" onClick={() => window.location.reload()}>
+              Refresh Page
+            </Button>
+          </CardContent>
+        </Card>
       </div>
+    );
+  }
+  
+  // No data state
+  if (!charger) {
+    return (
+      <div className="container py-8">
+        <div className="mb-4">
+          <Button variant="outline" size="sm" asChild>
+            <Link to="/chargers">
+              <ArrowUpDown className="mr-2 h-4 w-4" /> Back to Chargers
+            </Link>
+          </Button>
+        </div>
+        
+        <Card>
+          <CardContent className="pt-6">
+            <div className="flex flex-col items-center justify-center py-16">
+              <Battery className="h-10 w-10 text-muted-foreground mb-4" />
+              <p className="text-lg font-medium">Charger Not Found</p>
+              <p className="text-sm text-muted-foreground mt-1 max-w-md text-center">
+                We couldn't find the charger you're looking for. It may have been deleted or the ID is incorrect.
+              </p>
+              <Button className="mt-4" asChild>
+                <Link to="/chargers">View All Chargers</Link>
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
+  
+  // Main detail view
+  return (
+    <>
+      <Helmet>
+        <title>{chargerName} | Electric Flow Admin Portal</title>
+      </Helmet>
+      
+      <DetailTemplate
+        title={chargerName}
+        subtitle={chargerAddress}
+        description={`ID: ${charger.charger_id || id}`}
+        icon={<Zap className="h-5 w-5" />}
+        backPath="/chargers"
+        editPath={`/chargers/${id}/edit`}
+        onDelete={() => setShowDeleteDialog(true)}
+        actions={detailActions}
+        tabs={detailTabs}
+        defaultTab="overview"
+      >
+        {/* Overview Section */}
+        <DetailSection
+          title="Overview"
+          description="Basic charger information"
+          icon={<Zap className="h-5 w-5" />}
+        >
+          <div className="space-y-4">
+            <div>
+              <h3 className="text-sm font-medium text-muted-foreground">Status</h3>
+              <div className="mt-1 flex items-center gap-2">
+                <StatusBadge status={connectionStatus} variant={statusVariant} />
+                <span className="text-sm text-muted-foreground">
+                  Last heartbeat: {lastHeartbeat}
+                </span>
+              </div>
+            </div>
+            
+            <Separator />
+            
+            <div>
+              <h3 className="text-sm font-medium text-muted-foreground">Charger Type</h3>
+              <p className="text-lg">{chargerType}</p>
+              <p className="text-sm text-muted-foreground mt-1">
+                Price: {chargerPrice}
+              </p>
+            </div>
+            
+            <Separator />
+            
+            <div>
+              <h3 className="text-sm font-medium text-muted-foreground">Hardware</h3>
+              <p className="text-lg">{chargerModel}</p>
+              <p className="text-sm text-muted-foreground mt-1">
+                Vendor: {chargerVendor}
+              </p>
+            </div>
+            
+            <Separator />
+            
+            <div>
+              <h3 className="text-sm font-medium text-muted-foreground">Operational Status</h3>
+              <div className="mt-1 flex items-center gap-2">
+                <StatusBadge status={enabledStatus} variant={enabledVariant} />
+                <StatusBadge status={verifiedStatus} variant={verifiedVariant} />
+              </div>
+            </div>
+          </div>
+        </DetailSection>
+        
+        {/* Location Section */}
+        <DetailSection
+          title="Location"
+          description="Geographic information"
+          icon={<MapPin className="h-5 w-5" />}
+        >
+          <div className="space-y-4">
+            <div>
+              <h3 className="text-sm font-medium text-muted-foreground">Address</h3>
+              <p className="text-lg">{chargerAddress}</p>
+            </div>
+            
+            <Separator />
+            
+            {charger?.geometry && charger.geometry.coordinates && Array.isArray(charger.geometry.coordinates) && charger.geometry.coordinates.length >= 2 ? (
+              <div>
+                <h3 className="text-sm font-medium text-muted-foreground">Coordinates</h3>
+                <div className="mt-1">
+                  <p>Latitude: {charger.geometry.coordinates[1]}</p>
+                  <p>Longitude: {charger.geometry.coordinates[0]}</p>
+                  <div className="mt-2">
+                    <Button variant="outline" size="sm" asChild>
+                      <a 
+                        href={`https://maps.google.com/?q=${charger.geometry.coordinates[1]},${charger.geometry.coordinates[0]}`} 
+                        target="_blank" 
+                        rel="noopener noreferrer"
+                      >
+                        <MapPin className="mr-2 h-4 w-4" /> View on Map
+                      </a>
+                    </Button>
+                  </div>
+                </div>
+              </div>
+            ) : (
+              <div>
+                <h3 className="text-sm font-medium text-muted-foreground">Coordinates</h3>
+                <p className="text-muted-foreground">No location data available</p>
+              </div>
+            )}
+          </div>
+        </DetailSection>
+        
+        {/* Connectors Section */}
+        <DetailSection
+          title="Connectors"
+          description="Charging points information"
+          icon={<Plug className="h-5 w-5" />}
+        >
+          {charger.connectors && charger.connectors.length > 0 ? (
+            <div className="space-y-4">
+              {charger.connectors.map((connector: any, index: number) => (
+                <Card key={connector.id || index} className={index > 0 ? 'mt-4' : ''}>
+                  <CardHeader className="pb-2">
+                    <CardTitle className="text-lg flex items-center">
+                      <div 
+                        className="h-3 w-3 rounded-full mr-2" 
+                        style={{ 
+                          backgroundColor: connector.status === 'Available' ? 'green' : 
+                            connector.status === 'Charging' ? 'blue' : 'gray'
+                        }}
+                      />
+                      Connector #{connector.connector_id || index + 1}
+                    </CardTitle>
+                    <CardDescription>
+                      Type: {connector.type || 'Standard'} | Status: {connector.status || 'Unknown'}
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="grid grid-cols-2 gap-4">
+                      <div>
+                        <h4 className="text-sm font-medium text-muted-foreground">Max Power</h4>
+                        <p>{connector.max_power ? `${connector.max_power} kW` : 'Not specified'}</p>
+                      </div>
+                      <div>
+                        <h4 className="text-sm font-medium text-muted-foreground">Format</h4>
+                        <p>{connector.format || 'Standard'}</p>
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
+          ) : (
+            <div className="py-8 text-center">
+              <Plug className="h-12 w-12 text-muted-foreground mx-auto mb-4" strokeWidth={1.5} />
+              <p className="text-muted-foreground">No connectors configured for this charger.</p>
+            </div>
+          )}
+        </DetailSection>
+      </DetailTemplate>
       
       {/* Delete Confirmation Dialog */}
       <Dialog open={showDeleteDialog} onOpenChange={setShowDeleteDialog}>
@@ -508,7 +630,7 @@ const ChargerDetailPage = () => {
           <DialogHeader>
             <DialogTitle>Delete Charger</DialogTitle>
             <DialogDescription>
-              Are you sure you want to delete charger "{charger.name || charger.charger_id || 'Unknown'}"? This action cannot be undone.
+              Are you sure you want to delete charger "{chargerName}"? This action cannot be undone.
             </DialogDescription>
           </DialogHeader>
           
@@ -528,7 +650,7 @@ const ChargerDetailPage = () => {
           </DialogFooter>
         </DialogContent>
       </Dialog>
-    </PageLayout>
+    </>
   );
 };
 

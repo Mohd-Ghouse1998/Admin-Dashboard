@@ -1,10 +1,11 @@
 import { Route } from "react-router-dom";
 
 // User management pages
-import UsersListPage from "@/modules/users/pages/users/UsersListPage";
+import UsersListPage from "@/modules/users/pages/users/UsersListPage"; // Using EntityListTemplate
 import UserCreatePage from "@/modules/users/pages/users/UserCreatePage";
-import UserEditPage from "@/modules/users/pages/users/UserEditPage";
-import UserDetailPage from "@/modules/users/pages/users/UserDetailPage";
+import UserEditPage from "@/modules/users/pages/users/UserEditPage"; // Using EntityFormTemplate
+import UserDetailPage from "@/modules/users/pages/users/UserDetailPage"; // Using EntityDetailTemplate
+// Modern UI has been integrated into main DetailTemplate
 
 // Profile management pages
 import ProfilesListPage from "@/modules/users/pages/profiles/ProfilesListPage";
@@ -28,13 +29,7 @@ import {
   MyPermissionsPage
 } from "@/modules/users/pages/permissions";
 
-// Wallet management pages
-import {
-  WalletsListPage,
-  WalletCreatePage,
-  WalletEditPage,
-  WalletDetailPage
-} from "@/modules/users/pages/wallets";
+// Removed duplicate wallet imports - wallet functionality is in payments module
 
 // Import plan pages
 import {
@@ -76,6 +71,7 @@ export const userRoutes = (
     {/* User routes */}
     <Route path="create" element={<UserCreatePage />} />
     <Route path=":id" element={<UserDetailPage />} />
+    {/* Modern UI is now integrated into main detail page */}
     <Route path=":id/edit" element={<UserEditPage />} />
     <Route path=":id/permissions" element={<UserPermissionsPage />} />
     
@@ -92,11 +88,7 @@ export const userRoutes = (
     <Route path="permissions/:id/edit" element={<PermissionEditPage />} />
     <Route path="my-permissions" element={<MyPermissionsPage />} />
     
-    {/* Wallet routes */}
-    <Route path="wallets" element={<WalletsListPage />} />
-    <Route path="wallets/create" element={<WalletCreatePage />} />
-    <Route path="wallets/:id" element={<WalletDetailPage />} />
-    <Route path="wallets/:id/edit" element={<WalletEditPage />} />
+    {/* Wallet routes removed - functionality now in payments module */}
     
     {/* Plan routes */}
     <Route path="plans" element={<PlansListPage />} />

@@ -4,8 +4,8 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { useQuery, useMutation } from '@tanstack/react-query';
 import { Helmet } from 'react-helmet-async';
-import { PageLayout } from '@/components/layout/PageLayout';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { CreateTemplate, CreateSectionHeader } from '@/components/templates/create/CreateTemplate';
+import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/components/ui/use-toast';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
@@ -180,26 +180,33 @@ const ChangeAvailabilityPage = () => {
     changeAvailabilityMutation.mutate(values);
   };
 
+  // Process errors
+  const errorMessage = chargersError || connectorsError ? 
+    [
+      chargersError instanceof Error ? chargersError.message : '',
+      connectorsError instanceof Error ? connectorsError.message : ''
+    ].filter(Boolean).join('\n') || 'Failed to load resources' : null;
+  
   return (
-    <PageLayout
+    <CreateTemplate
       title="Change Availability"
-      description="Change the availability of a charger or connector remotely"
+      description="Change the operational status of a charger or connector"
+      icon={<Power className="h-5 w-5" />}
+      entityName="Availability"
+      backPath="/chargers/remote-operations"
+      error={errorMessage}
+      isSubmitting={changeAvailabilityMutation.isPending}
+      onSubmit={form.handleSubmit(onSubmit)}
     >
-      <Helmet>
-        <title>Change Availability | Electric Flow</title>
-      </Helmet>
-      
-      <Card className="w-full max-w-4xl mx-auto">
-        <CardHeader>
-          <CardTitle>Change Availability</CardTitle>
-          <CardDescription>
-            Change the availability of a charger or connector remotely.
-          </CardDescription>
-        </CardHeader>
-        
-        <CardContent>
-          <Form {...form}>
-            <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
+      <Form {...form}>
+        <div className="space-y-6">
+          <div className="border rounded-md overflow-hidden">
+            <CreateSectionHeader 
+              title="Availability Settings" 
+              description="Select the charger and specify the new availability"
+              icon={<Power className="h-4 w-4" />}
+            />
+            <div className="p-6 space-y-6">
               <div className="space-y-4">
                 <FormField
                   control={form.control}
@@ -207,79 +214,88 @@ const ChangeAvailabilityPage = () => {
                   render={({ field }) => (
                     <FormItem>
                       <FormLabel>Charger</FormLabel>
-                      <Select onValueChange={handleChargerChange} value={field.value}>
-                        <FormControl>
-                          <SelectTrigger>
-                            <SelectValue placeholder="Select a charger" />
-                          </SelectTrigger>
-                        </FormControl>
-                        <SelectContent>
-                          {chargersLoading ? (
-                            <div className="p-2 text-center">Loading...</div>
-                          ) : (
-                            // Handle nested GeoJSON format in results
-                            chargers?.results?.features?.map((charger, index) => {
-                              const chargerId = charger.properties?.charger_id || `charger-${index}`;
-                              return (
-                                <SelectItem 
-                                  key={`charger-${index}-${chargerId}`} 
-                                  value={chargerId}
-                                >
-                                  {`${charger.properties?.name || chargerId}`}
-                                </SelectItem>
-                              );
-                            }) || []
-                          )}
-                        </SelectContent>
-                      </Select>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-                
-                <FormField
-                  control={form.control}
-                  name="connectorId"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Connector (Optional)</FormLabel>
                       <Select 
-                        onValueChange={handleConnectorChange} 
-                        value={field.value?.toString()} 
-                        disabled={!selectedChargerId || connectorsLoading}
-                      >
-                        <FormControl>
-                          <SelectTrigger>
-                            <SelectValue placeholder="Select connector or entire charger" />
-                          </SelectTrigger>
-                        </FormControl>
-                        <SelectContent>
-                          <SelectItem value="0">Entire charger (all connectors)</SelectItem>
-                          {connectorsLoading ? (
-                            <div className="p-2 text-center">Loading...</div>
-                          ) : connectors?.results?.length ? (
-                            // Map through the API response connectors
-                            connectors.results.map((connector, index) => {
-                              // Ensure connector_id is a string
-                              const connectorId = connector.connector_id.toString();
-                              return (
-                                <SelectItem 
-                                  key={`connector-${connector.id}-${connectorId}`} 
-                                  value={connectorId}
-                                >
-                                  {`Connector #${connectorId} (${connector.type || 'Unknown'}) - ${connector.status}`}
-                                </SelectItem>
-                              );
-                            })
-                          ) : (
-                            <div className="p-2 text-center">No connectors found for this charger</div>
-                          )}
-                        </SelectContent>
-                      </Select>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
+                        onValueChange={(value) => {
+                          handleChargerChange(value);
+                          field.onChange(value);
+                        }} 
+                        value={field.value}
+                    >
+                      <FormControl>
+                        <SelectTrigger className="h-10 border-border hover:border-primary/20 focus:ring-1 focus:ring-primary/30 focus:border-primary/30">
+                          <SelectValue placeholder="Select a charger" />
+                        </SelectTrigger>
+                      </FormControl>
+                      <SelectContent>
+                        {chargersLoading ? (
+                          <div className="p-2 text-center">Loading...</div>
+                        ) : (
+                          // Handle nested GeoJSON format in results
+                          chargers?.results?.features?.map((charger, index) => {
+                            const chargerId = charger.properties?.charger_id || `charger-${index}`;
+                            return (
+                              <SelectItem 
+                                key={`charger-${index}-${chargerId}`} 
+                                value={chargerId}
+                              >
+                                {`${charger.properties?.name || chargerId}`}
+                              </SelectItem>
+                            );
+                          }) || []
+                        )}
+                      </SelectContent>
+                    </Select>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              
+              <FormField
+                control={form.control}
+                name="connectorId"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Connector</FormLabel>
+                    <Select 
+                      onValueChange={(value) => {
+                        if (value) handleConnectorChange(value);
+                        field.onChange(value ? parseInt(value) : undefined);
+                      }}
+                      value={field.value ? field.value.toString() : undefined}
+                      disabled={!form.getValues('chargerId')}
+                    >
+                      <FormControl>
+                        <SelectTrigger className="h-10 border-border hover:border-primary/20 focus:ring-1 focus:ring-primary/30 focus:border-primary/30">
+                          <SelectValue placeholder="Select connector or entire charger" />
+                        </SelectTrigger>
+                      </FormControl>
+                      <SelectContent>
+                        <SelectItem value="0">Entire charger (all connectors)</SelectItem>
+                        {connectorsLoading ? (
+                          <div className="p-2 text-center">Loading...</div>
+                        ) : connectors?.results?.length ? (
+                          // Map through the API response connectors
+                          connectors.results.map((connector, index) => {
+                            // Ensure connector_id is a string
+                            const connectorId = connector.connector_id.toString();
+                            return (
+                              <SelectItem 
+                                key={`connector-${connector.id}-${connectorId}`} 
+                                value={connectorId}
+                              >
+                                {`Connector #${connectorId} (${connector.type || 'Unknown'}) - ${connector.status}`}
+                              </SelectItem>
+                            );
+                          })
+                        ) : (
+                          <div className="p-2 text-center">No connectors found for this charger</div>
+                        )}
+                      </SelectContent>
+                    </Select>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
             </div>
             
             <div className="mt-4 space-y-4">
@@ -328,31 +344,11 @@ const ChangeAvailabilityPage = () => {
                 </div>
               </div>
             </div>
-              
-            <div className="flex justify-end">
-                <Button 
-                  type="submit" 
-                  disabled={changeAvailabilityMutation.isPending}
-                  className="ml-auto"
-                >
-                  {changeAvailabilityMutation.isPending ? (
-                    <>
-                      <div className="mr-2 h-4 w-4 animate-spin rounded-full border-2 border-background border-t-transparent"></div>
-                      Updating...
-                    </>
-                  ) : (
-                    <>
-                      <Power className="mr-2 h-4 w-4" />
-                      Change Availability
-                    </>
-                  )}
-                </Button>
-              </div>
-            </form>
-          </Form>
-        </CardContent>
-      </Card>
-    </PageLayout>
+            </div>
+          </div>
+        </div>
+      </Form>
+    </CreateTemplate>
   );
 };
 

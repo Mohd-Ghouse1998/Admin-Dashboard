@@ -34,9 +34,9 @@ export interface User {
 
 export const userService = {
   // Get all users with pagination
-  getUsers: async () => {
+  getUsers: async (params?: Record<string, string>) => {
     try {
-      const response = await axiosInstance.get<PaginatedResponse<User>>("/users/users/");
+      const response = await axiosInstance.get<PaginatedResponse<User>>("/users/users/", { params });
       console.log("API Response for users:", response);
       return response;
     } catch (error) {
@@ -102,6 +102,36 @@ export const userService = {
       return await axiosInstance.get<PaginatedResponse<UserProfile>>("/users/profiles/");
     } catch (error) {
       console.error("Error fetching user profiles:", error);
+      throw error;
+    }
+  },
+
+  // Create a new user profile
+  createProfile: async (token: string, profileData: any) => {
+    try {
+      return await axiosInstance.post<UserProfile>("/users/profiles/", profileData);
+    } catch (error) {
+      console.error("Error creating profile:", error);
+      throw error;
+    }
+  },
+
+  // Get a specific profile by ID
+  getProfile: async (profileId: number) => {
+    try {
+      return await axiosInstance.get<UserProfile>(`/users/profiles/${profileId}/`);
+    } catch (error) {
+      console.error(`Error fetching profile ${profileId}:`, error);
+      throw error;
+    }
+  },
+
+  // Update an existing profile
+  updateProfile: async (profileId: number, profileData: any) => {
+    try {
+      return await axiosInstance.put<UserProfile>(`/users/profiles/${profileId}/`, profileData);
+    } catch (error) {
+      console.error(`Error updating profile ${profileId}:`, error);
       throw error;
     }
   },

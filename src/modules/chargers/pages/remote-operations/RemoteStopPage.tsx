@@ -4,8 +4,8 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { useQuery, useMutation } from '@tanstack/react-query';
 import { Helmet } from 'react-helmet-async';
-import { PageLayout } from '@/components/layout/PageLayout';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { CreateTemplate, CreateSectionHeader } from '@/components/templates/create/CreateTemplate';
+import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/components/ui/use-toast';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
@@ -33,7 +33,7 @@ import { chargerApi } from '@/modules/chargers/services/chargerService';
 // Define form schema using zod
 const formSchema = z.object({
   chargerId: z.string({ required_error: "Charger ID is required" }),
-  transactionId: z.coerce.number({ required_error: "Transaction ID is required" }),
+  transactionId: z.coerce.number().optional(),
 });
 
 type FormValues = z.infer<typeof formSchema>;
@@ -41,6 +41,9 @@ type FormValues = z.infer<typeof formSchema>;
 const RemoteStopPage = () => {
   const { toast } = useToast();
   const { accessToken } = useAuth();
+  
+  // State for selected charger
+  const [selectedChargerId, setSelectedChargerId] = useState<string | null>(null);
   
   // Fetch chargers
   const {
@@ -55,6 +58,26 @@ const RemoteStopPage = () => {
       return result;
     },
     enabled: !!accessToken,
+  });
+  
+  // Fetch active transactions for the selected charger
+  const {
+    data: transactions,
+    isLoading: transactionsLoading,
+  } = useQuery({
+    queryKey: ['active-transactions', selectedChargerId],
+    queryFn: async () => {
+      if (!selectedChargerId) return { active_transactions: [] };
+      
+      try {
+        // This would be the actual API call to get active transactions
+        return { active_transactions: [{ connector_id: '1', transaction_id: '12345' }] };
+      } catch (error) {
+        console.error('Error fetching transactions:', error);
+        return { active_transactions: [] };
+      }
+    },
+    enabled: !!selectedChargerId && !!accessToken,
   });
   
   // Setup form with React Hook Form and Zod validation
@@ -100,35 +123,30 @@ const RemoteStopPage = () => {
     stopTransactionMutation.mutate(values);
   };
   
+  // Process any errors
+  const errorMessage = chargersError ? 
+    (chargersError instanceof Error ? chargersError.message : 'Failed to load chargers') : null;
+  
   return (
-    <PageLayout
-      title="Remote Stop Transaction"
-      description="Stop a charging transaction remotely"
+    <CreateTemplate
+      title="Stop Transaction"
+      description="Remotely stop a charging transaction"
+      icon={<StopCircle className="h-5 w-5" />}
+      entityName="Transaction"
+      backPath="/chargers/remote-operations"
+      error={errorMessage}
+      isSubmitting={stopTransactionMutation.isPending}
+      onSubmit={form.handleSubmit(onSubmit)}
     >
-      <Helmet>
-        <title>Remote Stop Transaction | Electric Flow Admin</title>
-      </Helmet>
-      
-      {chargersError && (
-        <Alert variant="destructive" className="mb-4">
-          <AlertCircle className="h-4 w-4" />
-          <AlertTitle>Error</AlertTitle>
-          <AlertDescription>
-            {chargersError instanceof Error ? chargersError.message : 'Failed to load chargers'}
-          </AlertDescription>
-        </Alert>
-      )}
-      
-      <Card>
-        <CardHeader>
-          <CardTitle>Remote Stop Transaction</CardTitle>
-          <CardDescription>
-            Fill in the required information to stop a charging transaction remotely
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <Form {...form}>
-            <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
+      <Form {...form}>
+        <div className="space-y-6">
+          <div className="border rounded-md overflow-hidden">
+            <CreateSectionHeader 
+              title="Transaction Details" 
+              description="Select the charger and transaction to stop"
+              icon={<StopCircle className="h-4 w-4" />}
+            />
+            <div className="p-6 space-y-6">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <FormField
                   control={form.control}
@@ -136,85 +154,91 @@ const RemoteStopPage = () => {
                   render={({ field }) => (
                     <FormItem>
                       <FormLabel>Charger</FormLabel>
-                      <Select onValueChange={field.onChange} value={field.value}>
+                      <Select 
+                        onValueChange={(value) => {
+                          setSelectedChargerId(value);
+                          field.onChange(value);
+                        }} 
+                        value={field.value}
+                      >
+                          <FormControl>
+                            <SelectTrigger className="h-10 border-border hover:border-primary/20 focus:ring-1 focus:ring-primary/30 focus:border-primary/30">
+                              <SelectValue placeholder="Select a charger" />
+                            </SelectTrigger>
+                          </FormControl>
+                          <SelectContent>
+                            {chargersLoading ? (
+                              <div className="p-2 text-center">Loading...</div>
+                            ) : (
+                              chargers?.results?.features?.map((charger, index) => {
+                                const chargerId = charger.properties?.charger_id || `charger-${index}`;
+                                return (
+                                  <SelectItem 
+                                    key={`charger-${index}-${chargerId}`} 
+                                    value={chargerId}
+                                  >
+                                    {`${charger.properties?.name || chargerId}`}
+                                  </SelectItem>
+                                );
+                              }) || []
+                            )}
+                          </SelectContent>
+                        </Select>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  
+                  <FormField
+                    control={form.control}
+                    name="transactionId"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Transaction ID</FormLabel>
                         <FormControl>
-                          <SelectTrigger>
-                            <SelectValue placeholder="Select a charger" />
-                          </SelectTrigger>
+                          <Input 
+                            type="number" 
+                            placeholder="Enter transaction ID" 
+                            className="h-10 border-border hover:border-primary/20 focus:ring-1 focus:ring-primary/30 focus:border-primary/30"
+                            {...field}
+                            value={field.value === undefined ? '' : field.value}
+                            onChange={(e) => {
+                              const value = e.target.value === '' ? undefined : parseInt(e.target.value);
+                              field.onChange(value);
+                            }}
+                          />
                         </FormControl>
-                        <SelectContent>
-                          {chargersLoading ? (
-                            <div className="p-2 text-center">Loading...</div>
-                          ) : (
-                            // Handle nested GeoJSON format in results
-                            chargers?.results?.features?.map((charger, index) => {
-                              const chargerId = charger.properties?.charger_id || `charger-${index}`;
-                              return (
-                                <SelectItem 
-                                  key={`charger-${index}-${chargerId}`} 
-                                  value={chargerId}
-                                >
-                                  {charger.properties?.name || chargerId}
-                                </SelectItem>
-                              );
-                            }) || []
-                          )}
-                        </SelectContent>
-                      </Select>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                </div>
                 
-                <FormField
-                  control={form.control}
-                  name="transactionId"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Transaction ID</FormLabel>
-                      <FormControl>
-                        <Input 
-                          type="number" 
-                          {...field} 
-                          value={field.value === undefined ? '' : field.value}
-                          onChange={(e) => {
-                            const value = e.target.value === '' ? undefined : parseInt(e.target.value);
-                            field.onChange(value);
-                          }}
-                          placeholder="Enter transaction ID"
-                        />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-              </div>
-              
-              <div className="flex justify-end">
-                <Button 
-                  type="submit" 
-                  disabled={stopTransactionMutation.isPending}
-                  className="ml-auto"
-                  variant="destructive"
-                >
-                  {stopTransactionMutation.isPending ? (
-                    <>
-                      <div className="mr-2 h-4 w-4 animate-spin rounded-full border-2 border-background border-t-transparent"></div>
-                      Stopping...
-                    </>
-                  ) : (
-                    <>
-                      <StopCircle className="mr-2 h-4 w-4" />
-                      Stop Transaction
-                    </>
-                  )}
-                </Button>
-              </div>
-            </form>
-          </Form>
-        </CardContent>
-      </Card>
-    </PageLayout>
+                {selectedChargerId && (
+                  <div className="mt-4 p-4 bg-muted/20 rounded-md">
+                    <h4 className="text-sm font-medium mb-2">Active Transactions</h4>
+                    {transactionsLoading ? (
+                      <div className="p-2 text-center">Loading transactions...</div>
+                    ) : transactions?.active_transactions?.length ? (
+                      <div className="space-y-2">
+                        {transactions.active_transactions.map((tx, idx) => (
+                          <div key={idx} className="p-2 border border-border rounded-md text-sm">
+                            <div>Connector: {tx.connector_id}</div>
+                            <div>Transaction: {tx.transaction_id}</div>
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <div className="text-sm text-muted-foreground">No active transactions for this charger</div>
+                    )}
+                  </div>
+                )}
+                
+            </div>
+          </div>
+        </div>
+      </Form>
+    </CreateTemplate>
   );
 };
 

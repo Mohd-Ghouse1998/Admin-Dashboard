@@ -1,9 +1,5 @@
-
 import React from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Helmet } from 'react-helmet-async';
-import { PageLayout } from '@/components/layout/PageLayout';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/hooks/use-toast';
 import { useUser } from '@/modules/users/hooks/useUser';
@@ -20,7 +16,7 @@ import {
   FormDescription,
 } from '@/components/ui/form';
 import { Input } from '@/components/ui/input';
-import { Separator } from '@/components/ui/separator';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import {
   Select,
   SelectContent,
@@ -28,7 +24,13 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
+import { 
+  User, Mail, Phone, Building, MapPin, Globe, Lock, 
+  ArrowLeft, Save, X, CheckCircle, AlertTriangle 
+} from 'lucide-react';
 import { UserCreatePayload } from '@/types/user';
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
+import { CreateTemplate } from '@/components/templates/create/CreateTemplate';
 
 // Define schema based on the field mappings for Create Form
 const userCreateSchema = z.object({
@@ -55,7 +57,8 @@ const UserCreatePage: React.FC = () => {
   const navigate = useNavigate();
   const { toast } = useToast();
   const { createUser } = useUser();
-
+  const [formError, setFormError] = React.useState<string | null>(null);
+  
   // Initialize form with default values
   const form = useForm<UserCreateForm>({
     resolver: zodResolver(userCreateSchema),
@@ -81,17 +84,20 @@ const UserCreatePage: React.FC = () => {
   // Submit handler
   const onSubmit = async (data: UserCreateForm) => {
     try {
+      setFormError(null);
+      
       // Ensure data conforms to the UserCreatePayload type
       const userPayload: UserCreatePayload = {
-        username: data.username, // Required
-        email: data.email, // Required
-        password: data.password, // Required
+        username: data.username,
+        email: data.email,
+        password: data.password,
         first_name: data.first_name,
         last_name: data.last_name,
         profile: data.profile
       };
       
-      await createUser(userPayload);
+      // Use the createUser mutation
+      await createUser.mutateAsync(userPayload as any);
       
       toast({
         title: 'Success',
@@ -102,6 +108,8 @@ const UserCreatePage: React.FC = () => {
     } catch (error) {
       console.error('Error creating user:', error);
       
+      setFormError(error instanceof Error ? error.message : 'Failed to create user');
+      
       toast({
         title: 'Error',
         description: error instanceof Error ? error.message : 'Failed to create user',
@@ -111,33 +119,43 @@ const UserCreatePage: React.FC = () => {
   };
 
   return (
-    <PageLayout
-      title="Create User"
-      description="Add a new user to the system"
-      backButton
-      backTo="/users"
+    <CreateTemplate
+      title="Create New User"
+      description="Create a new user with associated account details"
+      icon={<User className="h-5 w-5" />}
+      entityName="User"
+      onSubmit={form.handleSubmit(onSubmit)}
+      isSubmitting={form.formState.isSubmitting}
+      error={formError}
+      backPath="/users"
+      className="max-w-full container-fluid px-6" // Override container class to use full width
     >
-      <Helmet>
-        <title>Create User | Admin Dashboard</title>
-      </Helmet>
-      
-      <Card className="mb-4">
-        <CardHeader>
-          <CardTitle>User Information</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <Form {...form}>
-            <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
+      <Form {...form}>
+        <div className="space-y-8">
+          {/* Account Information Section */}
+          <Card className="overflow-hidden border-primary/10">
+            <div className="bg-gradient-to-r from-primary/5 to-primary/10 py-3 px-6 border-b border-primary/10">
+              <h3 className="font-medium flex items-center gap-2">
+                <User className="h-4 w-4 text-primary" />
+                Account Information
+              </h3>
+              <p className="text-xs text-muted-foreground mt-1">Create the user's login credentials and basic account details</p>
+            </div>
+            <CardContent className="p-6">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                {/* Basic Information */}
                 <FormField
                   control={form.control}
                   name="username"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>Username *</FormLabel>
+                      <FormLabel>Username <span className="text-red-500">*</span></FormLabel>
                       <FormControl>
-                        <Input placeholder="johndoe" {...field} />
+                        <div className="relative">
+                          <span className="absolute left-3 top-2.5 text-muted-foreground">
+                            <User className="h-4 w-4" />
+                          </span>
+                          <Input className="pl-9" placeholder="johndoe" {...field} />
+                        </div>
                       </FormControl>
                       <FormMessage />
                     </FormItem>
@@ -149,9 +167,14 @@ const UserCreatePage: React.FC = () => {
                   name="email"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>Email Address *</FormLabel>
+                      <FormLabel>Email Address <span className="text-red-500">*</span></FormLabel>
                       <FormControl>
-                        <Input placeholder="john.doe@example.com" type="email" {...field} />
+                        <div className="relative">
+                          <span className="absolute left-3 top-2.5 text-muted-foreground">
+                            <Mail className="h-4 w-4" />
+                          </span>
+                          <Input className="pl-9" placeholder="john.doe@example.com" {...field} />
+                        </div>
                       </FormControl>
                       <FormMessage />
                     </FormItem>
@@ -162,20 +185,28 @@ const UserCreatePage: React.FC = () => {
                   control={form.control}
                   name="password"
                   render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Password *</FormLabel>
+                    <FormItem className="col-span-2">
+                      <FormLabel>Password <span className="text-red-500">*</span></FormLabel>
                       <FormControl>
-                        <Input placeholder="••••••••" type="password" {...field} />
+                        <div className="relative">
+                          <span className="absolute left-3 top-2.5 text-muted-foreground">
+                            <Lock className="h-4 w-4" />
+                          </span>
+                          <Input 
+                            className="pl-9" 
+                            type="password" 
+                            placeholder="••••••••" 
+                            {...field} 
+                          />
+                        </div>
                       </FormControl>
+                      <FormDescription>
+                        Password must be at least 8 characters
+                      </FormDescription>
                       <FormMessage />
                     </FormItem>
                   )}
                 />
-                
-                <div className="col-span-2">
-                  <Separator className="my-4" />
-                  <h3 className="text-lg font-medium mb-4">Personal Information</h3>
-                </div>
                 
                 <FormField
                   control={form.control}
@@ -204,12 +235,21 @@ const UserCreatePage: React.FC = () => {
                     </FormItem>
                   )}
                 />
-                
-                <div className="col-span-2">
-                  <Separator className="my-4" />
-                  <h3 className="text-lg font-medium mb-4">Profile Details</h3>
-                </div>
-                
+              </div>
+            </CardContent>
+          </Card>
+          
+          {/* Contact Information Section */}
+          <Card className="overflow-hidden border-primary/10">
+            <div className="bg-gradient-to-r from-primary/5 to-primary/10 py-3 px-6 border-b border-primary/10">
+              <h3 className="font-medium flex items-center gap-2">
+                <Phone className="h-4 w-4 text-primary" />
+                Contact Information
+              </h3>
+              <p className="text-xs text-muted-foreground mt-1">Address and contact details</p>
+            </div>
+            <CardContent className="p-6">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <FormField
                   control={form.control}
                   name="profile.phone_number"
@@ -217,7 +257,12 @@ const UserCreatePage: React.FC = () => {
                     <FormItem>
                       <FormLabel>Phone Number</FormLabel>
                       <FormControl>
-                        <Input placeholder="+1234567890" {...field} />
+                        <div className="relative">
+                          <span className="absolute left-3 top-2.5 text-muted-foreground">
+                            <Phone className="h-4 w-4" />
+                          </span>
+                          <Input className="pl-9" placeholder="+1 (555) 123-4567" {...field} />
+                        </div>
                       </FormControl>
                       <FormMessage />
                     </FormItem>
@@ -231,7 +276,12 @@ const UserCreatePage: React.FC = () => {
                     <FormItem>
                       <FormLabel>Address</FormLabel>
                       <FormControl>
-                        <Input placeholder="123 Main St" {...field} />
+                        <div className="relative">
+                          <span className="absolute left-3 top-2.5 text-muted-foreground">
+                            <MapPin className="h-4 w-4" />
+                          </span>
+                          <Input className="pl-9" placeholder="123 Main Street" {...field} />
+                        </div>
                       </FormControl>
                       <FormMessage />
                     </FormItem>
@@ -271,20 +321,29 @@ const UserCreatePage: React.FC = () => {
                   name="profile.pin"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>PIN</FormLabel>
+                      <FormLabel>PIN / ZIP Code</FormLabel>
                       <FormControl>
-                        <Input placeholder="12345" {...field} />
+                        <Input placeholder="10001" {...field} />
                       </FormControl>
                       <FormMessage />
                     </FormItem>
                   )}
                 />
-                
-                <div className="col-span-2">
-                  <Separator className="my-4" />
-                  <h3 className="text-lg font-medium mb-4">OCPI Configuration</h3>
-                </div>
-                
+              </div>
+            </CardContent>
+          </Card>
+          
+          {/* OCPI Information Section */}
+          <Card className="overflow-hidden border-primary/10">
+            <div className="bg-gradient-to-r from-primary/5 to-primary/10 py-3 px-6 border-b border-primary/10">
+              <h3 className="font-medium flex items-center gap-2">
+                <Globe className="h-4 w-4 text-primary" />
+                OCPI Information
+              </h3>
+              <p className="text-xs text-muted-foreground mt-1">Open Charge Point Interface (OCPI) settings</p>
+            </div>
+            <CardContent className="p-6">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <FormField
                   control={form.control}
                   name="profile.ocpi_role"
@@ -296,18 +355,15 @@ const UserCreatePage: React.FC = () => {
                         value={field.value}
                       >
                         <FormControl>
-                          <SelectTrigger>
+                          <SelectTrigger className="h-10">
                             <SelectValue placeholder="Select OCPI role" />
                           </SelectTrigger>
                         </FormControl>
                         <SelectContent>
-                          <SelectItem value="CPO">CPO</SelectItem>
-                          <SelectItem value="eMSP">eMSP</SelectItem>
+                          <SelectItem value="CPO">Charge Point Operator (CPO)</SelectItem>
+                          <SelectItem value="eMSP">eMobility Service Provider (eMSP)</SelectItem>
                         </SelectContent>
                       </Select>
-                      <FormDescription>
-                        Charge Point Operator (CPO) or eMobility Service Provider (eMSP)
-                      </FormDescription>
                       <FormMessage />
                     </FormItem>
                   )}
@@ -331,32 +387,29 @@ const UserCreatePage: React.FC = () => {
                   control={form.control}
                   name="profile.ocpi_token"
                   render={({ field }) => (
-                    <FormItem>
+                    <FormItem className="col-span-2">
                       <FormLabel>OCPI Token</FormLabel>
                       <FormControl>
-                        <Input placeholder="OCPI Token" {...field} />
+                        <div className="relative">
+                          <span className="absolute left-3 top-2.5 text-muted-foreground">
+                            <Lock className="h-4 w-4" />
+                          </span>
+                          <Input className="pl-9 font-mono text-sm" placeholder="OCPI Token" {...field} />
+                        </div>
                       </FormControl>
+                      <FormDescription>
+                        This token will be used for API authentication
+                      </FormDescription>
                       <FormMessage />
                     </FormItem>
                   )}
                 />
               </div>
-              
-              <div className="flex justify-end gap-2">
-                <Button 
-                  variant="outline" 
-                  type="button"
-                  onClick={() => navigate('/users')}
-                >
-                  Cancel
-                </Button>
-                <Button type="submit">Create User</Button>
-              </div>
-            </form>
-          </Form>
-        </CardContent>
-      </Card>
-    </PageLayout>
+            </CardContent>
+          </Card>
+        </div>
+      </Form>
+    </CreateTemplate>
   );
 };
 

@@ -1,52 +1,50 @@
-import React, { useEffect } from 'react';
-import { Helmet } from 'react-helmet-async';
-import { useNavigate, useParams } from 'react-router-dom';
+import React, { useState, useEffect } from 'react';
+import { useParams, useNavigate } from 'react-router-dom';
+import { Button } from '@/components/ui/button';
+import { useToast } from '@/hooks/use-toast';
+import { useAuth } from '@/hooks/useAuth';
+import { z } from 'zod';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useForm } from 'react-hook-form';
-import * as z from 'zod';
-import { PageLayout } from '@/components/layout/PageLayout';
-import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage, FormDescription } from '@/components/ui/form';
+import {
+  Form,
+  FormControl,
+  FormField,
+  FormItem,
+  FormLabel,
+  FormMessage,
+  FormDescription,
+} from '@/components/ui/form';
 import { Input } from '@/components/ui/input';
-import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
+import { Badge } from '@/components/ui/badge';
 import { Switch } from '@/components/ui/switch';
-import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
-import { Loader2, Save, AlertCircle } from 'lucide-react';
+import { Skeleton } from '@/components/ui/skeleton';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
+import { 
+  Smartphone, 
+  Tablet, 
+  Save,
+  RefreshCw,
+  AlertTriangle,
+  User as UserIcon,
+  Settings,
+  ArrowLeft,
+  Loader2,
+  Check
+} from 'lucide-react';
 import { useMutation, useQuery } from '@tanstack/react-query';
-import { useAuth } from '@/hooks/useAuth';
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
+  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
+import { EditTemplate } from '@/components/templates/edit/EditTemplate';
 import { userService } from '@/modules/users/services/userService';
-import { useToast } from '@/hooks/use-toast';
-import FormSection from '@/components/common/FormSection';
-
-// Mock service for devices - replace with actual service when available
-const deviceService = {
-  getDeviceById: async (accessToken: string, id: string) => {
-    // This would be replaced with an actual API call
-    return {
-      id,
-      user: { id: '1', username: 'user1', email: 'user1@example.com' },
-      user_id: '1',
-      device_id: 'device_id_123456789',
-      registration_id: 'reg_token_abcdefghijklmnopqrstuvwxyz0123456789',
-      device_type: 'ANDROID',
-      created_at: '2025-01-15T10:00:00Z',
-      updated_at: '2025-01-15T10:00:00Z',
-      is_active: true,
-      device_model: 'Google Pixel 6',
-      os_version: 'Android 14',
-      app_version: '1.5.2'
-    };
-  },
-  updateDevice: async (accessToken: string, id: string, data: any) => {
-    // This would be replaced with an actual API call
-    return {
-      id,
-      ...data,
-      updated_at: new Date().toISOString()
-    };
-  }
-};
+import { deviceService } from '@/modules/users/services/deviceService';
 
 // Define device type options
 const deviceTypeOptions = [
@@ -72,11 +70,13 @@ const formSchema = z.object({
 
 type FormValues = z.infer<typeof formSchema>;
 
-const DeviceEditPage = () => {
+const DeviceEditPage: React.FC = () => {
   const { id } = useParams<{ id: string }>();
-  const { accessToken } = useAuth();
-  const { toast } = useToast();
   const navigate = useNavigate();
+  const { toast } = useToast();
+  const { accessToken } = useAuth();
+  const [isResetDialogOpen, setIsResetDialogOpen] = useState(false);
+  const [formStatus, setFormStatus] = useState<'idle' | 'changed' | 'saving' | 'saved'>('idle');
   
   // Form setup
   const form = useForm<FormValues>({
@@ -96,68 +96,114 @@ const DeviceEditPage = () => {
   // Fetch device data
   const {
     data: device,
-    isLoading: isLoadingDevice,
-    error: deviceError
+    isLoading,
+    error
   } = useQuery({
     queryKey: ['device', id],
-    queryFn: () => {
+    queryFn: async () => {
       if (!accessToken || !id) {
         throw new Error('No access token or device ID available');
       }
-      return deviceService.getDeviceById(accessToken, id);
+      return deviceService.getDevice(accessToken, id);
     },
     enabled: !!accessToken && !!id,
   });
 
   // Fetch users for dropdown
-  const { data: users, isLoading: isLoadingUsers } = useQuery({
+  const { 
+    data: usersData, 
+    isLoading: isLoadingUsers 
+  } = useQuery({
     queryKey: ['users'],
-    queryFn: () => {
+    queryFn: async () => {
       if (!accessToken) {
         throw new Error('No access token available');
       }
-      return userService.getUsers(accessToken);
+      const response = await userService.getUsers(accessToken);
+      return response.data || [];
     },
     enabled: !!accessToken,
   });
 
-  // Update form when device data is loaded
+  // Set form defaults when device data loads
   useEffect(() => {
     if (device) {
       form.reset({
-        user_id: device.user_id,
-        device_id: device.device_id,
-        registration_id: device.registration_id,
-        device_type: device.device_type,
+        user_id: device.user?.id || '',
+        device_id: device.device_id || '',
+        registration_id: device.registration_id || '',
+        device_type: (device.device_type as 'ANDROID' | 'IOS') || 'ANDROID',
         device_model: device.device_model || '',
         os_version: device.os_version || '',
         app_version: device.app_version || '',
-        is_active: device.is_active,
+        is_active: typeof device.is_active === 'boolean' ? device.is_active : true,
       });
     }
   }, [device, form]);
+  
+  // Track form changes
+  useEffect(() => {
+    const subscription = form.watch(() => {
+      setFormStatus('changed');
+    });
+    return () => subscription.unsubscribe();
+  }, [form]);
 
-  // Update device mutation
+  // Generate random registration ID
+  const generateRegistrationId = () => {
+    const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
+    let result = '';
+    for (let i = 0; i < 32; i++) {
+      result += chars.charAt(Math.floor(Math.random() * chars.length));
+    }
+    return result;
+  };
+
+  // Mutation for updating device
+  // Import Device type from deviceService.ts
+  type DeviceUpdatePayload = {
+    user_id: string;
+    device_id: string;
+    registration_id: string;
+    device_type: 'ANDROID' | 'IOS';
+    device_model?: string;
+    os_version?: string;
+    app_version?: string;
+    is_active: boolean;
+  };
+
   const updateDeviceMutation = useMutation({
-    mutationFn: (data: FormValues) => {
-      if (!id) throw new Error('No device ID available');
-      return deviceService.updateDevice(accessToken, id, data);
+    mutationFn: async (data: FormValues) => {
+      if (!accessToken || !id) return null;
+      setFormStatus('saving');
+      // Convert form data to the API expected format
+      const deviceData: DeviceUpdatePayload = {
+        user_id: data.user_id,
+        device_id: data.device_id,
+        registration_id: data.registration_id,
+        device_type: data.device_type,
+        device_model: data.device_model,
+        os_version: data.os_version,
+        app_version: data.app_version,
+        is_active: data.is_active
+      };
+      return deviceService.updateDevice(accessToken, id, deviceData);
     },
     onSuccess: () => {
       toast({
         title: 'Success',
         description: 'Device updated successfully',
-        variant: 'success',
       });
-      navigate(`/users/devices/${id}`);
+      setFormStatus('saved');
+      setTimeout(() => setFormStatus('idle'), 2000);
     },
     onError: (error) => {
-      console.error('Error updating device:', error);
       toast({
-        title: 'Error',
-        description: 'Failed to update device',
         variant: 'destructive',
+        title: 'Error',
+        description: error instanceof Error ? error.message : 'Failed to update device',
       });
+      setFormStatus('idle');
     },
   });
 
@@ -165,103 +211,115 @@ const DeviceEditPage = () => {
   const onSubmit = (values: FormValues) => {
     updateDeviceMutation.mutate(values);
   };
-
-  // Generate random registration ID
-  const generateRegistrationId = () => {
-    const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
-    let result = '';
-    const length = 64; // Typical Firebase token length
-    for (let i = 0; i < length; i++) {
-      result += chars.charAt(Math.floor(Math.random() * chars.length));
+  
+  // Function to reset registration ID
+  const handleResetRegistrationId = () => {
+    const newRegistrationId = generateRegistrationId();
+    form.setValue('registration_id', newRegistrationId);
+    setIsResetDialogOpen(false);
+    toast({
+      title: 'Registration ID reset',
+      description: 'A new registration ID has been generated',
+    });
+    setFormStatus('changed');
+  };
+  
+  // Get form status indicator
+  const getFormStatusIndicator = () => {
+    switch (formStatus) {
+      case 'idle':
+        return null;
+      case 'changed':
+        return (
+          <Badge variant="outline" className="bg-yellow-50 text-yellow-700 border-yellow-200 flex items-center gap-1.5">
+            <AlertTriangle className="h-3.5 w-3.5" />
+            Unsaved Changes
+          </Badge>
+        );
+      case 'saving':
+        return (
+          <Badge variant="outline" className="bg-blue-50 text-blue-700 border-blue-200 flex items-center gap-1.5">
+            <Loader2 className="h-3.5 w-3.5 animate-spin" />
+            Saving...
+          </Badge>
+        );
+      case 'saved':
+        return (
+          <Badge variant="outline" className="bg-emerald-50 text-emerald-700 border-emerald-200 flex items-center gap-1.5">
+            <Check className="h-3.5 w-3.5" />
+            All changes saved
+          </Badge>
+        );
     }
-    form.setValue('registration_id', result);
   };
 
-  if (isLoadingDevice) {
-    return (
-      <PageLayout title="Edit Device" description="Loading device information...">
-        <div className="flex justify-center items-center h-64">
-          <Loader2 className="h-8 w-8 animate-spin text-primary" />
-        </div>
-      </PageLayout>
-    );
-  }
-
-  if (deviceError || !device) {
-    return (
-      <PageLayout title="Error" description="Failed to load device details">
-        <Alert variant="destructive">
-          <AlertCircle className="h-4 w-4" />
-          <AlertTitle>Error</AlertTitle>
-          <AlertDescription>
-            {deviceError instanceof Error ? deviceError.message : 'Failed to load device details'}
-          </AlertDescription>
-        </Alert>
-      </PageLayout>
-    );
-  }
-
   return (
-    <PageLayout
-      title="Edit Device"
-      description={`Edit device registration for ${device.device_id.substring(0, 12)}...`}
-      breadcrumbs={[
-        { label: 'Users', url: '/users' },
-        { label: 'Devices', url: '/users/devices' },
-        { label: `Device ${id}`, url: `/users/devices/${id}` },
-        { label: 'Edit' }
-      ]}
-    >
-      <Helmet>
-        <title>Edit Device | Admin Dashboard</title>
-      </Helmet>
-      
-      <Card>
-        <CardHeader>
-          <CardTitle>Edit Device</CardTitle>
-          <CardDescription>Update device registration details</CardDescription>
-        </CardHeader>
-        <CardContent>
-          <Form {...form}>
-            <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-8">
-              <FormSection title="User Information" description="Device owner">
+    <>
+      <EditTemplate
+        title="Edit Device"
+        description="Update device information"
+        icon={device?.device_type === 'ANDROID' ? 
+          <Smartphone className="h-5 w-5" /> : 
+          <Tablet className="h-5 w-5" />}
+        backPath={`/users/devices/${id}`}
+        isLoading={isLoading}
+        error={error instanceof Error ? error.message : undefined}
+        isSubmitting={updateDeviceMutation.isPending}
+      >
+        <Form {...form}>
+          <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
+            {/* Associated User Card */}
+            <Card className="overflow-hidden">
+              <CardHeader className="bg-gradient-to-r from-gray-50 to-gray-100 border-b">
+                <CardTitle className="flex items-center gap-2">
+                  <UserIcon className="h-5 w-5" />
+                  Associated User
+                </CardTitle>
+                <CardDescription>User who owns this device</CardDescription>
+              </CardHeader>
+              <CardContent className="p-6 space-y-4">
                 <FormField
                   control={form.control}
                   name="user_id"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>User</FormLabel>
+                      <FormLabel>User Account</FormLabel>
                       <Select
-                        disabled={isLoadingUsers}
                         onValueChange={field.onChange}
                         defaultValue={field.value}
+                        disabled={isLoadingUsers}
                       >
                         <FormControl>
-                          <SelectTrigger>
-                            <SelectValue placeholder="Select user" />
+                          <SelectTrigger className="w-full h-10">
+                            <SelectValue placeholder="Select a user" />
                           </SelectTrigger>
                         </FormControl>
                         <SelectContent>
-                          {isLoadingUsers ? (
-                            <SelectItem value="loading" disabled>Loading users...</SelectItem>
-                          ) : users?.results ? (
-                            users.results.map((user: any) => (
-                              <SelectItem key={user.id} value={user.id.toString()}>
-                                {user.username || user.email}
-                              </SelectItem>
-                            ))
-                          ) : (
-                            <SelectItem value="none" disabled>No users available</SelectItem>
-                          )}
+                          {!isLoadingUsers && usersData && Array.isArray(usersData) && usersData.map((user: any) => (
+                            <SelectItem key={user.id} value={user.id}>
+                              {user.username || user.email}
+                            </SelectItem>
+                          ))}
                         </SelectContent>
                       </Select>
+                      <FormDescription>The user who owns this device</FormDescription>
                       <FormMessage />
                     </FormItem>
                   )}
                 />
-              </FormSection>
-              
-              <FormSection title="Device Information" description="Details about the device">
+              </CardContent>
+            </Card>
+
+            {/* Device Information Card */}
+            <Card className="overflow-hidden">
+              <CardHeader className="bg-gradient-to-r from-gray-50 to-gray-100 border-b">
+                <CardTitle className="flex items-center gap-2">
+                  <Smartphone className="h-5 w-5" />
+                  Device Information
+                </CardTitle>
+                <CardDescription>Basic device information and identifiers</CardDescription>
+              </CardHeader>
+              <CardContent className="p-6 space-y-4">
                 <FormField
                   control={form.control}
                   name="device_id"
@@ -269,75 +327,78 @@ const DeviceEditPage = () => {
                     <FormItem>
                       <FormLabel>Device ID</FormLabel>
                       <FormControl>
-                        <Input placeholder="device_id_123456" {...field} />
+                        <Input {...field} />
                       </FormControl>
-                      <FormDescription>
-                        Unique identifier for the device
-                      </FormDescription>
+                      <FormDescription>Unique identifier for this device</FormDescription>
                       <FormMessage />
                     </FormItem>
                   )}
                 />
                 
-                <div className="flex space-x-2 items-end">
-                  <div className="flex-1">
-                    <FormField
-                      control={form.control}
-                      name="registration_id"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>Registration ID</FormLabel>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <FormField
+                    control={form.control}
+                    name="registration_id"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Registration Token</FormLabel>
+                        <div className="flex">
                           <FormControl>
-                            <Input placeholder="Firebase registration token" {...field} />
+                            <Input className="rounded-r-none font-mono text-sm" {...field} />
                           </FormControl>
-                          <FormDescription>
-                            Push notification registration token
-                          </FormDescription>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-                  </div>
-                  <Button 
-                    type="button" 
-                    variant="outline" 
-                    onClick={generateRegistrationId}
-                    className="mb-[2px]"
-                  >
-                    Generate New
-                  </Button>
+                          <Button 
+                            type="button" 
+                            variant="secondary"
+                            className="rounded-l-none"
+                            onClick={() => setIsResetDialogOpen(true)}
+                          >
+                            <RefreshCw className="h-4 w-4" />
+                          </Button>
+                        </div>
+                        <FormDescription>Device registration token used for authentication</FormDescription>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  
+                  <FormField
+                    control={form.control}
+                    name="device_type"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Device Type</FormLabel>
+                        <Select onValueChange={field.onChange} defaultValue={field.value}>
+                          <FormControl>
+                            <SelectTrigger>
+                              <SelectValue placeholder="Select device type" />
+                            </SelectTrigger>
+                          </FormControl>
+                          <SelectContent>
+                            {deviceTypeOptions.map((option) => (
+                              <SelectItem key={option.value} value={option.value}>
+                                {option.label}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
                 </div>
-                
-                <FormField
-                  control={form.control}
-                  name="device_type"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Device Type</FormLabel>
-                      <Select
-                        onValueChange={field.onChange}
-                        defaultValue={field.value}
-                      >
-                        <FormControl>
-                          <SelectTrigger>
-                            <SelectValue placeholder="Select device type" />
-                          </SelectTrigger>
-                        </FormControl>
-                        <SelectContent>
-                          {deviceTypeOptions.map((option) => (
-                            <SelectItem key={option.value} value={option.value}>
-                              {option.label}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-              </FormSection>
-              
-              <FormSection title="Additional Information" description="Optional device details">
+              </CardContent>
+            </Card>
+
+            {/* Additional Details Card */}
+            <Card className="overflow-hidden">
+              <CardHeader className="bg-gradient-to-r from-gray-50 to-gray-100 border-b">
+                <CardTitle className="flex items-center gap-2">
+                  <Settings className="h-5 w-5" />
+                  Additional Information
+                </CardTitle>
+                <CardDescription>Optional device details and specifications</CardDescription>
+              </CardHeader>
+              <CardContent className="p-6 space-y-4">
                 <FormField
                   control={form.control}
                   name="device_model"
@@ -345,11 +406,8 @@ const DeviceEditPage = () => {
                     <FormItem>
                       <FormLabel>Device Model</FormLabel>
                       <FormControl>
-                        <Input placeholder="Google Pixel 6" {...field} />
+                        <Input placeholder="Google Pixel 6, iPhone 14, etc." {...field} />
                       </FormControl>
-                      <FormDescription>
-                        The model of the device (optional)
-                      </FormDescription>
                       <FormMessage />
                     </FormItem>
                   )}
@@ -363,7 +421,7 @@ const DeviceEditPage = () => {
                       <FormItem>
                         <FormLabel>OS Version</FormLabel>
                         <FormControl>
-                          <Input placeholder="Android 14" {...field} />
+                          <Input placeholder="Android 14, iOS 16, etc." {...field} />
                         </FormControl>
                         <FormMessage />
                       </FormItem>
@@ -389,11 +447,11 @@ const DeviceEditPage = () => {
                   control={form.control}
                   name="is_active"
                   render={({ field }) => (
-                    <FormItem className="flex flex-row items-center justify-between rounded-lg border p-4">
+                    <FormItem className="flex flex-row items-center justify-between rounded-lg border p-4 mt-4">
                       <div className="space-y-0.5">
                         <FormLabel className="text-base">Active Status</FormLabel>
                         <FormDescription>
-                          Enable or disable this device
+                          {field.value ? 'Device is active and allowed to connect' : 'Device is disabled and cannot connect'}
                         </FormDescription>
                       </div>
                       <FormControl>
@@ -402,43 +460,37 @@ const DeviceEditPage = () => {
                           onCheckedChange={field.onChange}
                         />
                       </FormControl>
-                      <FormMessage />
                     </FormItem>
                   )}
                 />
-              </FormSection>
-              
-              <div className="flex justify-end gap-4">
-                <Button
-                  type="button"
-                  variant="outline"
-                  onClick={() => navigate(`/users/devices/${id}`)}
-                  disabled={updateDeviceMutation.isPending}
-                >
-                  Cancel
-                </Button>
-                <Button
-                  type="submit"
-                  disabled={updateDeviceMutation.isPending}
-                >
-                  {updateDeviceMutation.isPending ? (
-                    <>
-                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                      Updating...
-                    </>
-                  ) : (
-                    <>
-                      <Save className="mr-2 h-4 w-4" />
-                      Update Device
-                    </>
-                  )}
-                </Button>
-              </div>
-            </form>
-          </Form>
-        </CardContent>
-      </Card>
-    </PageLayout>
+              </CardContent>
+            </Card>
+            
+
+            
+
+          </form>
+        </Form>
+      </EditTemplate>
+      
+      {/* Reset Registration Token Dialog */}
+      <AlertDialog open={isResetDialogOpen} onOpenChange={setIsResetDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Reset Registration Token?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This will generate a new registration token for this device. The old token will no longer work and the device will need to be re-authenticated.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={handleResetRegistrationId} className="bg-destructive text-destructive-foreground">
+              Reset Token
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+    </>
   );
 };
 
