@@ -1,4 +1,3 @@
-
 import React from 'react';
 import { cn } from '@/lib/utils';
 import { TrendingUp, TrendingDown } from 'lucide-react';
@@ -17,6 +16,7 @@ interface StatCardProps {
   className?: string;
   isLoading?: boolean;
   subtitle?: string;
+  description?: string;
 }
 
 export const StatCard: React.FC<StatCardProps> = ({
@@ -28,6 +28,7 @@ export const StatCard: React.FC<StatCardProps> = ({
   className,
   isLoading = false,
   subtitle,
+  description,
 }) => {
   const variantStyles = {
     default: 'bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700',
@@ -43,7 +44,8 @@ export const StatCard: React.FC<StatCardProps> = ({
   const defaultText = {
     title: 'text-gray-600 dark:text-gray-400',
     value: 'text-gray-900 dark:text-white',
-    subtitle: 'text-gray-500 dark:text-gray-400'
+    subtitle: 'text-gray-500 dark:text-gray-400',
+    description: 'text-gray-500 dark:text-gray-400 text-xs'
   };
 
   if (isLoading) {
@@ -80,7 +82,7 @@ export const StatCard: React.FC<StatCardProps> = ({
             {title}
           </h3>
           
-          <div className="mt-2 flex items-baseline">
+          <div className="mt-2">
             <p className={cn(
               "text-2xl font-bold tracking-tight leading-none",
               variant === 'default' ? defaultText.value : ""
@@ -88,36 +90,37 @@ export const StatCard: React.FC<StatCardProps> = ({
               {value}
             </p>
             
+            {description && (
+              <p className={cn(
+                "mt-1 text-xs",
+                variant === 'default' ? defaultText.description : ""
+              )}>
+                {description}
+              </p>
+            )}
+            
             {subtitle && (
-              <span className={cn(
-                "ml-1.5 text-sm font-medium",
+              <p className={cn(
+                "mt-1 text-sm font-medium",
                 variant === 'default' ? defaultText.subtitle : ""
               )}>
                 {subtitle}
-              </span>
+              </p>
+            )}
+            
+            {trend && (
+              <div className="mt-2 flex items-center space-x-1 text-xs">
+                {trend.isPositive ? (
+                  <TrendingUp className="h-3 w-3 text-green-500" />
+                ) : (
+                  <TrendingDown className="h-3 w-3 text-red-500" />
+                )}
+                <span className={trend.isPositive ? 'text-green-500' : 'text-red-500'}>
+                  {trend.value}% {trend.label || ''}
+                </span>
+              </div>
             )}
           </div>
-          
-          {trend && (
-            <div className="flex items-center mt-2.5">
-              <div className={cn(
-                "flex items-center text-sm font-medium",
-                trend.isPositive ? "text-green-600 dark:text-green-400" : "text-red-600 dark:text-red-400"
-              )}>
-                <span className="inline-flex items-center mr-1.5">
-                  {trend.isPositive ? (
-                    <TrendingUp className="h-4 w-4" />
-                  ) : (
-                    <TrendingDown className="h-4 w-4" />
-                  )}
-                </span>
-                <span className="font-semibold">{Math.abs(trend.value)}%</span>
-                {trend.label && (
-                  <span className="ml-1.5 text-xs text-gray-500 dark:text-gray-400">{trend.label}</span>
-                )}
-              </div>
-            </div>
-          )}
         </div>
         
         {icon && (

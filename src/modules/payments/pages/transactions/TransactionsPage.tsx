@@ -1,25 +1,14 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { PageLayout } from '@/components/layout/PageLayout';
+import { ListTemplate, Column } from '@/components/templates/list/ListTemplate';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { 
   DropdownMenu, 
   DropdownMenuContent, 
   DropdownMenuItem, 
-  DropdownMenuSeparator, 
   DropdownMenuTrigger 
 } from '@/components/ui/dropdown-menu';
-import { 
-  Table,
-  TableHeader,
-  TableBody,
-  TableHead,
-  TableRow,
-  TableCell
-} from '@/components/ui/table';
 import { 
   Select, 
   SelectContent, 
@@ -29,179 +18,156 @@ import {
 } from '@/components/ui/select';
 import { 
   Tabs,
-  TabsContent,
   TabsList,
   TabsTrigger
 } from '@/components/ui/tabs';
 import { StatCard } from '@/components/ui/stat-card';
 import { 
-  Calendar, 
   CreditCard, 
   Download, 
   Eye, 
-  Filter, 
+  Filter,
   MoreHorizontal, 
   Printer, 
   RefreshCw, 
-  Search, 
-  SlidersHorizontal 
+  Clock,
+  CheckCircle,
+  XCircle,
+  Calendar,
 } from 'lucide-react';
 import { DateRangePicker } from '@/components/ui/date-range-picker';
+import { formatDistanceToNow } from 'date-fns';
+import { formatCurrency } from '@/utils/formatters';
+import { useToast } from '@/hooks/use-toast';
+import { useAuth } from '@/contexts/AuthContext';
+import { transactionService, Transaction, TransactionFilters } from '@/modules/payments/services/transactionService';
 
-// Mock data for transactions
-const mockTransactions = [
-  {
-    id: 'tx-001',
-    userId: '101',
-    username: 'johndoe',
-    userEmail: 'john.doe@example.com',
-    amount: 49.99,
-    currency: 'USD',
-    status: 'completed',
-    type: 'payment',
-    paymentMethod: 'credit_card',
-    cardType: 'Visa',
-    cardLast4: '4242',
-    reference: 'Session #4589',
-    description: 'Charging session payment',
-    createdAt: '2025-05-01T14:30:00Z'
-  },
-  {
-    id: 'tx-002',
-    userId: '102',
-    username: 'janedoe',
-    userEmail: 'jane.doe@example.com',
-    amount: 150.00,
-    currency: 'USD',
-    status: 'completed',
-    type: 'topup',
-    paymentMethod: 'bank_transfer',
-    reference: 'Wallet topup',
-    description: 'Wallet balance top-up',
-    createdAt: '2025-04-30T10:15:00Z'
-  },
-  {
-    id: 'tx-003',
-    userId: '103',
-    username: 'bobsmith',
-    userEmail: 'bob.smith@example.com',
-    amount: 25.50,
-    currency: 'USD',
-    status: 'pending',
-    type: 'payment',
-    paymentMethod: 'wallet',
-    reference: 'Session #4612',
-    description: 'Charging session payment',
-    createdAt: '2025-05-02T09:45:00Z'
-  },
-  {
-    id: 'tx-004',
-    userId: '101',
-    username: 'johndoe',
-    userEmail: 'john.doe@example.com',
-    amount: 35.75,
-    currency: 'USD',
-    status: 'failed',
-    type: 'payment',
-    paymentMethod: 'credit_card',
-    cardType: 'Mastercard',
-    cardLast4: '5678',
-    reference: 'Session #4623',
-    description: 'Charging session payment',
-    createdAt: '2025-05-02T11:20:00Z'
-  },
-  {
-    id: 'tx-005',
-    userId: '104',
-    username: 'alicegreen',
-    userEmail: 'alice.green@example.com',
-    amount: 75.25,
-    currency: 'USD',
-    status: 'completed',
-    type: 'payment',
-    paymentMethod: 'wallet',
-    reference: 'Session #4650',
-    description: 'Charging session payment',
-    createdAt: '2025-05-03T08:30:00Z'
-  },
-  {
-    id: 'tx-006',
-    userId: '102',
-    username: 'janedoe',
-    userEmail: 'jane.doe@example.com',
-    amount: 20.00,
-    currency: 'USD',
-    status: 'completed',
-    type: 'refund',
-    paymentMethod: 'credit_card',
-    cardType: 'Visa',
-    cardLast4: '1234',
-    reference: 'Session #4590',
-    description: 'Refund for incomplete session',
-    createdAt: '2025-05-01T16:45:00Z'
-  },
-  {
-    id: 'tx-007',
-    userId: '105',
-    username: 'carljenkins',
-    userEmail: 'carl.jenkins@example.com',
-    amount: 200.00,
-    currency: 'USD',
-    status: 'completed',
-    type: 'topup',
-    paymentMethod: 'credit_card',
-    cardType: 'Amex',
-    cardLast4: '7890',
-    reference: 'Wallet topup',
-    description: 'Wallet balance top-up',
-    createdAt: '2025-04-29T13:10:00Z'
-  },
-  {
-    id: 'tx-008',
-    userId: '103',
-    username: 'bobsmith',
-    userEmail: 'bob.smith@example.com',
-    amount: 45.50,
-    currency: 'USD',
-    status: 'completed',
-    type: 'payment',
-    paymentMethod: 'credit_card',
-    cardType: 'Visa',
-    cardLast4: '4444',
-    reference: 'Session #4580',
-    description: 'Charging session payment',
-    createdAt: '2025-04-28T17:30:00Z'
-  }
-];
+// Interface for transaction stats
+interface TransactionStats {
+  totalRevenue: number;
+  totalRefunds: number;
+  pendingAmount: number;
+  totalCount: number;
+  completedCount: number;
+  pendingCount: number;
+  failedCount: number;
+  trends: {
+    revenue: number;
+    refunds: number;
+    pending: number;
+  };
+}
 
-const TransactionsPage = () => {
+const TransactionsPage: React.FC = () => {
   const navigate = useNavigate();
+  const { toast } = useToast();
+  const { isAuthenticated, accessToken } = useAuth();
   const [activeTab, setActiveTab] = useState('all');
   const [searchTerm, setSearchTerm] = useState('');
   const [typeFilter, setTypeFilter] = useState('all');
   const [statusFilter, setStatusFilter] = useState('all');
-  const [dateRange, setDateRange] = useState<{ from?: Date; to?: Date; }>({});
-  const [filteredTransactions, setFilteredTransactions] = useState(mockTransactions);
-  const [showFilters, setShowFilters] = useState(false);
+  const [dateRange, setDateRange] = useState<{ from?: Date; to?: Date }>({});
+  const [transactions, setTransactions] = useState<Transaction[]>([]);
+  const [filteredTransactions, setFilteredTransactions] = useState<Transaction[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [selectedTransactions, setSelectedTransactions] = useState<Transaction[]>([]);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [pageSize, setPageSize] = useState(10);
+  const [totalItems, setTotalItems] = useState(0);
+  
+  // Transaction stats
+  const [stats, setStats] = useState<TransactionStats>({
+    totalRevenue: 0,
+    totalRefunds: 0,
+    pendingAmount: 0,
+    totalCount: 0,
+    completedCount: 0,
+    pendingCount: 0,
+    failedCount: 0,
+    trends: {
+      revenue: 0,
+      refunds: 0,
+      pending: 0
+    }
+  });
 
-  // Calculate summary metrics
-  const totalRevenue = mockTransactions
-    .filter(tx => tx.status === 'completed' && tx.type === 'payment')
-    .reduce((sum, tx) => sum + tx.amount, 0);
-    
-  const totalRefunds = mockTransactions
-    .filter(tx => tx.status === 'completed' && tx.type === 'refund')
-    .reduce((sum, tx) => sum + tx.amount, 0);
-    
-  const pendingAmount = mockTransactions
-    .filter(tx => tx.status === 'pending')
-    .reduce((sum, tx) => sum + tx.amount, 0);
-
-  const formatCurrency = (amount: number) => {
-    return new Intl.NumberFormat('en-US', {
-      style: 'currency',
-      currency: 'USD'
-    }).format(amount);
+  // Fetch transaction data from API
+  const fetchTransactions = async () => {
+    setIsLoading(true);
+    try {
+      // Prepare filters for API call
+      const filters: TransactionFilters = {
+        page: currentPage,
+        page_size: pageSize,
+        search: searchTerm || undefined
+      };
+      
+      // Add type filter if not 'all'
+      if (typeFilter !== 'all') {
+        filters.type = typeFilter;
+      }
+      
+      // Add status filter if not 'all'
+      if (statusFilter !== 'all') {
+        filters.status = statusFilter;
+      }
+      
+      // Add date range filters
+      if (dateRange.from) {
+        filters.start_date = dateRange.from.toISOString().split('T')[0];
+      }
+      
+      if (dateRange.to) {
+        // Add 1 day to include the end date
+        const endDate = new Date(dateRange.to);
+        endDate.setDate(endDate.getDate() + 1);
+        filters.end_date = endDate.toISOString().split('T')[0];
+      }
+      
+      // Call API to get transactions with filters
+      const response = await transactionService.getTransactions(filters);
+      
+      // Update state with fetched data
+      setTransactions(response.results);
+      setFilteredTransactions(response.results);
+      setTotalItems(response.count);
+      
+      // Fetch stats separately
+      fetchStats();
+    } catch (error) {
+      console.error('Error fetching transactions:', error);
+      toast({
+        title: 'Error',
+        description: 'Failed to load transactions. Please try again.',
+        variant: 'destructive',
+      });
+    } finally {
+      setIsLoading(false);
+    }
+  };
+  
+  // Fetch transaction stats for KPI cards
+  const fetchStats = async () => {
+    try {
+      const statsData = await transactionService.getTransactionStats();
+      setStats({
+        totalRevenue: statsData.total_revenue || 0,
+        totalRefunds: statsData.total_refunds || 0,
+        pendingAmount: statsData.pending_amount || 0,
+        totalCount: statsData.total_count || 0,
+        completedCount: statsData.completed_count || 0,
+        pendingCount: statsData.pending_count || 0,
+        failedCount: statsData.failed_count || 0,
+        trends: {
+          revenue: statsData.trends?.revenue || 5.3, // Fallback to default if API doesn't provide
+          refunds: statsData.trends?.refunds || -1.2,
+          pending: statsData.trends?.pending || 0.5
+        }
+      });
+    } catch (error) {
+      console.error('Error fetching transaction stats:', error);
+      // Don't show toast for stats error as it's not critical
+    }
   };
 
   const formatDate = (dateString: string) => {
@@ -215,44 +181,24 @@ const TransactionsPage = () => {
     });
   };
 
-  const handleSearch = () => {
-    applyFilters();
-  };
-
-  const handleSearchChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    setSearchTerm(e.target.value);
-    if (e.target.value === '') {
-      applyFilters();
-    }
-  };
-
-  const handleKeyPress = (e: React.KeyboardEvent<HTMLInputElement>) => {
-    if (e.key === 'Enter') {
-      handleSearch();
-    }
-  };
-
   const handleTypeChange = (value: string) => {
     setTypeFilter(value);
-    applyFilters(value, statusFilter, dateRange);
   };
 
   const handleStatusChange = (value: string) => {
     setStatusFilter(value);
-    applyFilters(typeFilter, value, dateRange);
   };
 
-  const handleDateRangeChange = (range: { from?: Date; to?: Date; }) => {
+  const handleDateRangeChange = (range: { from?: Date; to?: Date }) => {
     setDateRange(range);
-    applyFilters(typeFilter, statusFilter, range);
   };
 
   const handleTabChange = (value: string) => {
     setActiveTab(value);
     
     // Update filters based on tab
-    let newTypeFilter = typeFilter;
-    let newStatusFilter = statusFilter;
+    let newTypeFilter = 'all';
+    let newStatusFilter = 'all';
     
     if (value === 'payments') {
       newTypeFilter = 'payment';
@@ -264,58 +210,8 @@ const TransactionsPage = () => {
       newStatusFilter = 'pending';
     }
     
-    setTypeFilter(value === 'all' ? 'all' : newTypeFilter);
-    setStatusFilter(value === 'pending' ? 'pending' : newStatusFilter);
-    
-    applyFilters(
-      value === 'all' ? 'all' : newTypeFilter,
-      value === 'pending' ? 'pending' : newStatusFilter,
-      dateRange
-    );
-  };
-
-  const applyFilters = (
-    type = typeFilter, 
-    status = statusFilter, 
-    dates = dateRange
-  ) => {
-    let filtered = [...mockTransactions];
-    
-    // Apply type filter
-    if (type !== 'all') {
-      filtered = filtered.filter(tx => tx.type === type);
-    }
-    
-    // Apply status filter
-    if (status !== 'all') {
-      filtered = filtered.filter(tx => tx.status === status);
-    }
-    
-    // Apply date range filter
-    if (dates.from) {
-      filtered = filtered.filter(tx => new Date(tx.createdAt) >= dates.from!);
-    }
-    
-    if (dates.to) {
-      // Add 1 day to include the end date
-      const endDate = new Date(dates.to);
-      endDate.setDate(endDate.getDate() + 1);
-      filtered = filtered.filter(tx => new Date(tx.createdAt) < endDate);
-    }
-    
-    // Apply search filter
-    if (searchTerm.trim()) {
-      const term = searchTerm.toLowerCase();
-      filtered = filtered.filter(tx => 
-        tx.id.toLowerCase().includes(term) ||
-        tx.username.toLowerCase().includes(term) ||
-        tx.userEmail.toLowerCase().includes(term) ||
-        tx.reference.toLowerCase().includes(term) ||
-        tx.description.toLowerCase().includes(term)
-      );
-    }
-    
-    setFilteredTransactions(filtered);
+    setTypeFilter(newTypeFilter);
+    setStatusFilter(newStatusFilter);
   };
 
   const clearFilters = () => {
@@ -323,328 +219,351 @@ const TransactionsPage = () => {
     setTypeFilter('all');
     setStatusFilter('all');
     setDateRange({});
-    setFilteredTransactions(mockTransactions);
+    setActiveTab('all');
+    setCurrentPage(1);
   };
 
   const handleViewTransaction = (id: string) => {
     navigate(`/payments/transactions/${id}`);
   };
 
-  // Reset filters when component loads
-  React.useEffect(() => {
-    clearFilters();
-  }, []);
+  // Handle search
+  const handleSearchChange = (value: string) => {
+    setSearchTerm(value);
+  };
+
+  // Fetch data when component loads or when filters change
+  useEffect(() => {
+    if (isAuthenticated && accessToken) {
+      fetchTransactions();
+    } else {
+      setIsLoading(false);
+      toast({
+        title: 'Authentication Required',
+        description: 'Please login to view transaction data.',
+        variant: 'destructive',
+      });
+    }
+  }, [currentPage, pageSize, typeFilter, statusFilter, dateRange, searchTerm, isAuthenticated, accessToken]);
+  
+  // Handle pagination
+  const handlePageChange = (page: number) => {
+    setCurrentPage(page);
+  };
+  
+  const handlePageSizeChange = (size: number) => {
+    setPageSize(size);
+    setCurrentPage(1);
+  };
+
+  // Handle bulk selection
+  const handleSelectionChange = (selected: Transaction[]) => {
+    setSelectedTransactions(selected);
+  };
+  
+  // Define columns for the transaction list
+  const columns: Column<Transaction>[] = [
+    {
+      header: "ID",
+      key: "id",
+      render: (transaction) => (
+        <div className="font-mono text-xs">{transaction.id}</div>
+      )
+    },
+    {
+      header: "Date",
+      key: "createdAt",
+      render: (transaction) => (
+        <div>
+          <div>{formatDate(transaction.createdAt).split(',')[0]}</div>
+          <div className="text-xs text-muted-foreground">
+            {formatDistanceToNow(new Date(transaction.createdAt), { addSuffix: true })}
+          </div>
+        </div>
+      )
+    },
+    {
+      header: "User",
+      render: (transaction) => (
+        <div>
+          <div className="font-medium">{transaction.username}</div>
+          <div className="text-xs text-muted-foreground">{transaction.userEmail}</div>
+        </div>
+      )
+    },
+    {
+      header: "Type",
+      key: "type",
+      render: (transaction) => {
+        const typeConfig = {
+          payment: { label: "Payment", variant: "default", icon: <CreditCard className="h-3 w-3 mr-1" /> },
+          refund: { label: "Refund", variant: "destructive", icon: <RefreshCw className="h-3 w-3 mr-1" /> },
+          topup: { label: "Top-up", variant: "secondary", icon: <Calendar className="h-3 w-3 mr-1" /> }
+        };
+        
+        const config = typeConfig[transaction.type];
+        
+        return (
+          <Badge variant={config.variant as any} className="flex items-center gap-1">
+            {config.icon}
+            {config.label}
+          </Badge>
+        );
+      }
+    },
+    {
+      header: "Amount",
+      key: "amount",
+      align: "right",
+      render: (transaction) => (
+        <div className="font-medium text-right">
+          {formatCurrency(transaction.amount, transaction.currency)}
+        </div>
+      )
+    },
+    {
+      header: "Status",
+      key: "status",
+      render: (transaction) => {
+        const statusConfig = {
+          completed: { label: "Completed", variant: "success", icon: <CheckCircle className="h-3 w-3 mr-1" /> },
+          pending: { label: "Pending", variant: "warning", icon: <Clock className="h-3 w-3 mr-1" /> },
+          failed: { label: "Failed", variant: "destructive", icon: <XCircle className="h-3 w-3 mr-1" /> }
+        };
+        
+        const config = statusConfig[transaction.status];
+        
+        return (
+          <Badge variant={config.variant as any} className="flex items-center gap-1">
+            {config.icon}
+            {config.label}
+          </Badge>
+        );
+      }
+    },
+    {
+      header: "Method",
+      key: "paymentMethod",
+      render: (transaction) => {
+        const methodLabel: Record<string, string> = {
+          credit_card: transaction.cardType ? `${transaction.cardType} (${transaction.cardLast4})` : "Credit Card",
+          bank_transfer: "Bank Transfer",
+          wallet: "Wallet"
+        };
+        
+        return (
+          <div className="text-sm">
+            {methodLabel[transaction.paymentMethod] || transaction.paymentMethod}
+          </div>
+        );
+      }
+    },
+    {
+      header: "Reference",
+      key: "reference",
+      render: (transaction) => (
+        <div className="max-w-[180px] truncate" title={transaction.reference}>
+          {transaction.reference}
+        </div>
+      )
+    }
+  ];
+  
+  // Create the custom filter component for the ListTemplate
+  const filterComponent = (
+    <div className="flex items-center gap-3">
+      <div className="flex-shrink-0 w-[160px]">
+        <Select value={typeFilter} onValueChange={handleTypeChange}>
+          <SelectTrigger className="h-9 w-full">
+            <SelectValue placeholder="All Types" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">All Types</SelectItem>
+            <SelectItem value="payment">Payment</SelectItem>
+            <SelectItem value="refund">Refund</SelectItem>
+            <SelectItem value="topup">Top-up</SelectItem>
+          </SelectContent>
+        </Select>
+      </div>
+
+      <div className="flex-shrink-0 w-[160px]">
+        <Select value={statusFilter} onValueChange={handleStatusChange}>
+          <SelectTrigger className="h-9 w-full">
+            <SelectValue placeholder="All Statuses" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">All Statuses</SelectItem>
+            <SelectItem value="completed">Completed</SelectItem>
+            <SelectItem value="pending">Pending</SelectItem>
+            <SelectItem value="failed">Failed</SelectItem>
+          </SelectContent>
+        </Select>
+      </div>
+
+      <div className="flex-shrink-0 w-[160px]">
+        <DateRangePicker
+          date={dateRange}
+          onDateChange={handleDateRangeChange}
+        />
+      </div>
+      
+      <Button variant="ghost" size="sm" className="ml-2" onClick={clearFilters}>
+        Reset Filters
+      </Button>
+    </div>
+  );
+  
+  // Custom filter bar to display above the table
+  const customFilterBar = (
+    <div className="flex items-center justify-between mb-4 mt-4 border-b pb-4">
+      <div className="flex items-center gap-2 text-xs text-muted-foreground">
+        <span>Transaction Type</span>
+        <span className="ml-28">Status</span>
+        <span className="ml-28">Date Range</span>
+      </div>
+    </div>
+  );
+  
+  // Create stats cards for the ListTemplate
+  const statsCards = (
+    <div className="grid gap-4 md:grid-cols-3 mb-6">
+      <div className="bg-white rounded-lg p-6 shadow-sm border border-gray-100">
+        <div className="flex items-center justify-between">
+          <h3 className="text-sm font-medium text-gray-600">Total Revenue</h3>
+          <div className="flex-shrink-0">
+            <CreditCard className="h-5 w-5 text-gray-400" />
+          </div>
+        </div>
+        <div className="mt-2">
+          <p className="text-2xl font-semibold text-gray-900">{formatCurrency(stats.totalRevenue)}</p>
+          <div className="flex items-center mt-1">
+            <span className={`text-xs font-medium flex items-center ${stats.trends.revenue >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+              {stats.trends.revenue >= 0 ? '↑' : '↓'} {Math.abs(stats.trends.revenue).toFixed(1)}%
+            </span>
+          </div>
+        </div>
+      </div>
+      
+      <div className="bg-white rounded-lg p-6 shadow-sm border border-gray-100">
+        <div className="flex items-center justify-between">
+          <h3 className="text-sm font-medium text-gray-600">Refunds</h3>
+          <div className="flex-shrink-0">
+            <RefreshCw className="h-5 w-5 text-gray-400" />
+          </div>
+        </div>
+        <div className="mt-2">
+          <p className="text-2xl font-semibold text-gray-900">{formatCurrency(stats.totalRefunds)}</p>
+          <div className="flex items-center mt-1">
+            <span className={`text-xs font-medium flex items-center ${stats.trends.refunds >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+              {stats.trends.refunds >= 0 ? '↑' : '↓'} {Math.abs(stats.trends.refunds).toFixed(1)}%
+            </span>
+          </div>
+        </div>
+      </div>
+      
+      <div className="bg-white rounded-lg p-6 shadow-sm border border-gray-100">
+        <div className="flex items-center justify-between">
+          <h3 className="text-sm font-medium text-gray-600">Pending Transactions</h3>
+          <div className="flex-shrink-0">
+            <Clock className="h-5 w-5 text-gray-400" />
+          </div>
+        </div>
+        <div className="mt-2">
+          <p className="text-2xl font-semibold text-gray-900">{formatCurrency(stats.pendingAmount)}</p>
+          <div className="flex items-center mt-1">
+            <span className={`text-xs font-medium flex items-center ${stats.trends.pending >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+              {stats.trends.pending >= 0 ? '↑' : '↓'} {Math.abs(stats.trends.pending).toFixed(1)}%
+            </span>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
 
   return (
-    <PageLayout
-      title="Transaction Management"
-      description="View and manage payment transactions"
-    >
-      <div className="grid gap-6">
-        <div className="grid gap-6 md:grid-cols-3">
-          <StatCard 
-            title="Total Revenue" 
-            value={formatCurrency(totalRevenue)}
-            icon={<CreditCard className="h-4 w-4" />}
-            description="From successful payments"
-            trend={{ value: 5.3, label: 'vs last month', direction: 'up' }}
-          />
-          <StatCard 
-            title="Refunds" 
-            value={formatCurrency(totalRefunds)}
-            icon={<RefreshCw className="h-4 w-4" />}
-            description="Total refunded amount"
-            trend={{ value: 1.2, label: 'vs last month', direction: 'down' }}
-          />
-          <StatCard 
-            title="Pending Transactions" 
-            value={formatCurrency(pendingAmount)}
-            icon={<Calendar className="h-4 w-4" />}
-            description="Awaiting processing"
-            trend={{ value: 0.5, label: 'vs last month', direction: 'up' }}
-          />
-        </div>
-
-        <Card>
-          <CardHeader className="flex flex-col sm:flex-row justify-between items-start sm:items-center space-y-2 sm:space-y-0">
-            <CardTitle>Transaction List</CardTitle>
-            <Tabs
-              defaultValue={activeTab}
-              onValueChange={handleTabChange}
-              className="w-full sm:w-auto"
-            >
-              <TabsList>
-                <TabsTrigger value="all">All</TabsTrigger>
-                <TabsTrigger value="payments">Payments</TabsTrigger>
-                <TabsTrigger value="refunds">Refunds</TabsTrigger>
-                <TabsTrigger value="topups">Top-ups</TabsTrigger>
-                <TabsTrigger value="pending">Pending</TabsTrigger>
-              </TabsList>
-            </Tabs>
-          </CardHeader>
-          <CardContent>
-            <div className="mb-6">
-              <div className="flex flex-wrap gap-4 justify-between items-center">
-                <div className="relative w-full md:w-auto md:flex-1 max-w-sm">
-                  <Input
-                    placeholder="Search transactions..."
-                    value={searchTerm}
-                    onChange={handleSearchChange}
-                    onKeyPress={handleKeyPress}
-                    className="pr-8"
-                  />
-                  <Search
-                    className="absolute right-2 top-2.5 h-4 w-4 text-gray-400 cursor-pointer"
-                    onClick={handleSearch}
-                  />
-                </div>
-
-                <div className="flex flex-wrap gap-2 items-center">
-                  <Button 
-                    variant="outline" 
-                    size="sm"
-                    onClick={() => setShowFilters(!showFilters)}
-                  >
-                    <Filter className="mr-2 h-4 w-4" />
-                    {showFilters ? 'Hide Filters' : 'Show Filters'}
-                  </Button>
-                  
-                  <Button variant="outline" size="sm">
-                    <Download className="mr-2 h-4 w-4" />
-                    Export
-                  </Button>
-                  
-                  <Button variant="outline" size="sm">
-                    <Printer className="mr-2 h-4 w-4" />
-                    Print
-                  </Button>
-                </div>
-              </div>
-
-              {showFilters && (
-                <div className="mt-4 p-4 border rounded-md grid grid-cols-1 md:grid-cols-3 gap-4 items-end">
-                  <div>
-                    <label className="block text-sm font-medium mb-1">
-                      Transaction Type
-                    </label>
-                    <Select value={typeFilter} onValueChange={handleTypeChange}>
-                      <SelectTrigger>
-                        <SelectValue placeholder="All Types" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="all">All Types</SelectItem>
-                        <SelectItem value="payment">Payments</SelectItem>
-                        <SelectItem value="refund">Refunds</SelectItem>
-                        <SelectItem value="topup">Top-ups</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  
-                  <div>
-                    <label className="block text-sm font-medium mb-1">
-                      Status
-                    </label>
-                    <Select value={statusFilter} onValueChange={handleStatusChange}>
-                      <SelectTrigger>
-                        <SelectValue placeholder="All Statuses" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="all">All Statuses</SelectItem>
-                        <SelectItem value="completed">Completed</SelectItem>
-                        <SelectItem value="pending">Pending</SelectItem>
-                        <SelectItem value="failed">Failed</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  
-                  <div>
-                    <label className="block text-sm font-medium mb-1">
-                      Date Range
-                    </label>
-                    <DateRangePicker 
-                      date={dateRange}
-                      onDateChange={handleDateRangeChange}
-                    />
-                  </div>
-                  
-                  <div className="md:col-span-3 flex justify-end">
-                    <Button 
-                      variant="outline" 
-                      size="sm"
-                      onClick={clearFilters}
-                      className="mr-2"
-                    >
-                      Clear Filters
-                    </Button>
-                    <Button 
-                      size="sm"
-                      onClick={() => applyFilters()}
-                    >
-                      Apply Filters
-                    </Button>
-                  </div>
-                </div>
-              )}
-            </div>
-
-            <div className="rounded-md border">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Transaction ID</TableHead>
-                    <TableHead>User</TableHead>
-                    <TableHead>Amount</TableHead>
-                    <TableHead>Type</TableHead>
-                    <TableHead>Status</TableHead>
-                    <TableHead className="hidden md:table-cell">Method</TableHead>
-                    <TableHead className="hidden md:table-cell">Date</TableHead>
-                    <TableHead className="text-right">Actions</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {filteredTransactions.length === 0 ? (
-                    <TableRow>
-                      <TableCell colSpan={8} className="text-center py-6">
-                        <div className="flex flex-col items-center">
-                          <SlidersHorizontal className="h-8 w-8 text-gray-400 mb-2" />
-                          <p className="text-gray-500">No transactions found</p>
-                          <Button 
-                            variant="link" 
-                            onClick={clearFilters}
-                            className="mt-2"
-                          >
-                            Clear filters
-                          </Button>
-                        </div>
-                      </TableCell>
-                    </TableRow>
-                  ) : (
-                    filteredTransactions.map((transaction) => (
-                      <TableRow 
-                        key={transaction.id} 
-                        className="cursor-pointer hover:bg-gray-50"
-                        onClick={() => handleViewTransaction(transaction.id)}
-                      >
-                        <TableCell className="font-mono text-xs">
-                          {transaction.id}
-                        </TableCell>
-                        <TableCell>
-                          <div className="flex flex-col">
-                            <span className="font-medium">{transaction.username}</span>
-                            <span className="text-sm text-gray-500">{transaction.userEmail}</span>
-                          </div>
-                        </TableCell>
-                        <TableCell className="font-medium">
-                          {formatCurrency(transaction.amount)}
-                        </TableCell>
-                        <TableCell>
-                          <Badge 
-                            variant={
-                              transaction.type === 'payment' ? 'default' : 
-                              transaction.type === 'refund' ? 'warning' : 
-                              'success'
-                            }
-                          >
-                            {transaction.type === 'payment' ? 'Payment' : 
-                             transaction.type === 'refund' ? 'Refund' : 
-                             'Top-up'}
-                          </Badge>
-                        </TableCell>
-                        <TableCell>
-                          <Badge 
-                            variant={
-                              transaction.status === 'completed' ? 'success' : 
-                              transaction.status === 'pending' ? 'warning' : 
-                              'destructive'
-                            }
-                          >
-                            {transaction.status}
-                          </Badge>
-                        </TableCell>
-                        <TableCell className="hidden md:table-cell">
-                          {transaction.paymentMethod === 'credit_card' ? 
-                           `${transaction.cardType} ****${transaction.cardLast4}` : 
-                           transaction.paymentMethod === 'bank_transfer' ? 
-                           'Bank Transfer' : 'Wallet'}
-                        </TableCell>
-                        <TableCell className="hidden md:table-cell">
-                          {formatDate(transaction.createdAt)}
-                        </TableCell>
-                        <TableCell className="text-right">
-                          <DropdownMenu>
-                            <DropdownMenuTrigger asChild onClick={(e) => e.stopPropagation()}>
-                              <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
-                                <span className="sr-only">Open menu</span>
-                                <MoreHorizontal className="h-4 w-4" />
-                              </Button>
-                            </DropdownMenuTrigger>
-                            <DropdownMenuContent align="end">
-                              <DropdownMenuItem onClick={(e) => {
-                                e.stopPropagation();
-                                handleViewTransaction(transaction.id);
-                              }}>
-                                <Eye className="mr-2 h-4 w-4" />
-                                View details
-                              </DropdownMenuItem>
-                              <DropdownMenuItem 
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  // Would trigger print function
-                                }}
-                              >
-                                <Printer className="mr-2 h-4 w-4" />
-                                Print receipt
-                              </DropdownMenuItem>
-                              <DropdownMenuSeparator />
-                              {transaction.status === 'pending' && (
-                                <DropdownMenuItem 
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    // Would trigger cancel function
-                                  }}
-                                  className="text-red-600"
-                                >
-                                  Cancel transaction
-                                </DropdownMenuItem>
-                              )}
-                            </DropdownMenuContent>
-                          </DropdownMenu>
-                        </TableCell>
-                      </TableRow>
-                    ))
-                  )}
-                </TableBody>
-              </Table>
-            </div>
-            
-            {filteredTransactions.length > 0 && (
-              <div className="flex items-center justify-end space-x-2 mt-4">
-                <div className="flex-1 text-sm text-gray-500">
-                  Showing <span className="font-medium">{filteredTransactions.length}</span> of{" "}
-                  <span className="font-medium">{mockTransactions.length}</span> transactions
-                </div>
-                <div className="space-x-2">
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    disabled={true}
-                  >
-                    Previous
-                  </Button>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    disabled={true}
-                  >
-                    Next
-                  </Button>
-                </div>
-              </div>
-            )}
-          </CardContent>
-        </Card>
+    <div className="space-y-6">
+      {statsCards}
+      
+      <div className="flex justify-between items-center mb-6">
+        <Tabs
+          value={activeTab}
+          onValueChange={handleTabChange}
+          className="w-full sm:w-auto"
+        >
+          <TabsList>
+            <TabsTrigger value="all">All</TabsTrigger>
+            <TabsTrigger value="payments">Payments</TabsTrigger>
+            <TabsTrigger value="refunds">Refunds</TabsTrigger>
+            <TabsTrigger value="topups">Top-ups</TabsTrigger>
+            <TabsTrigger value="pending">Pending</TabsTrigger>
+          </TabsList>
+        </Tabs>
       </div>
-    </PageLayout>
+      
+      {customFilterBar}
+      
+      <ListTemplate
+        title="Transaction List"
+        description="View and manage payment transactions"
+        icon={<CreditCard className="h-4 w-4" />}
+        data={filteredTransactions}
+        columns={columns}
+        isLoading={isLoading}
+        searchQuery={searchTerm}
+        onSearchChange={handleSearchChange}
+        searchPlaceholder="Search by ID, user, or reference..."
+        filterComponent={filterComponent}
+        onRowClick={(transaction) => handleViewTransaction(transaction.id)}
+        rowActions={(transaction) => (
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="ghost" size="icon" className="h-8 w-8 p-0">
+                <MoreHorizontal className="h-4 w-4" />
+                <span className="sr-only">Open menu</span>
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              <DropdownMenuItem onClick={() => handleViewTransaction(transaction.id)}>
+                <Eye className="mr-2 h-4 w-4" />
+                View Details
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => window.print()}>
+                <Printer className="mr-2 h-4 w-4" />
+                Print Receipt
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => alert(`Downloading receipt for ${transaction.id}`)}>
+                <Download className="mr-2 h-4 w-4" />
+                Download Receipt
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        )}
+        selectedItems={selectedTransactions}
+        onSelectItems={handleSelectionChange}
+        selectable={true}
+
+        emptyState={
+          <div className="text-center py-10">
+            <div className="text-lg font-medium">No transactions found</div>
+            <p className="text-sm text-muted-foreground mt-2">
+              Try adjusting your search or filter criteria
+            </p>
+            <Button variant="outline" className="mt-4" onClick={clearFilters}>
+              Reset Filters
+            </Button>
+          </div>
+        }
+        // Pagination props
+        currentPage={currentPage}
+        pageSize={pageSize}
+        totalPages={Math.ceil(totalItems / pageSize)}
+        onPageChange={handlePageChange}
+        onPageSizeChange={handlePageSizeChange}
+        // Export option
+        onExport={() => alert('Exporting transactions...')}
+        className="border border-border rounded-lg shadow-sm"
+      />
+    </div>
   );
 };
 

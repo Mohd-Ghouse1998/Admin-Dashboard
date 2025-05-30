@@ -2,7 +2,7 @@
 import { Route } from "react-router-dom";
 import AppLayout from "@/components/layout/AppLayout";
 import GuestLayout from "@/components/layout/GuestLayout";
-import Dashboard from "@/modules/dashboard/pages/DashboardPage";
+import { EVDashboardPage } from "@/modules/evdashboard";
 import NotFound from "@/modules/common/pages/NotFoundPage";
 import { tenantRoutes } from "./tenantRoutes";
 import { authRoutes } from "./authRoutes";
@@ -13,6 +13,7 @@ import { ocpiRoutes } from "./ocpiRoutes";
 import { paymentRoutes } from "./paymentRoutes";
 import { deviceRoutes } from "./deviceRoutes";
 import { settingsRoutes } from "./settingsRoutes";
+import { evDashboardRoutes } from "./evDashboardRoutes";
 
 // Main routes object containing all application routes
 export const appRoutes = {
@@ -27,7 +28,7 @@ export const appRoutes = {
   protectedRoutes: (
     <Route element={<AppLayout />}>
       {/* Dashboard */}
-      <Route path="/" element={<Dashboard />} />
+      <Route path="/" element={<EVDashboardPage />} />
       
       {/* Feature-specific routes */}
       {tenantRoutes}
@@ -38,6 +39,7 @@ export const appRoutes = {
       {paymentRoutes}
       {deviceRoutes}
       {settingsRoutes}
+      {evDashboardRoutes}
       
       {/* Catch-all route */}
       <Route path="*" element={<NotFound />} />
@@ -55,7 +57,8 @@ export const routes = {
   ocpiRoutes,
   paymentRoutes,
   deviceRoutes,
-  settingsRoutes
+  settingsRoutes,
+  evDashboardRoutes
 };
 
 export * from './tenantRoutes';
@@ -67,3 +70,4 @@ export * from './ocpiRoutes';
 export * from './paymentRoutes';
 export * from './deviceRoutes';
 export * from './settingsRoutes';
+export * from './evDashboardRoutes';

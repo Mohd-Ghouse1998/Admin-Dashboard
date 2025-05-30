@@ -8,14 +8,14 @@ export const settingsRoutes = (
   <>
     <Route path="/settings/*" element={<Settings />} />
     <Route path="/otp-management" element={<OTPManagement />} />
-    <Route path="/reports/usage" element={<Dashboard />} />
-    <Route path="/reports/revenue" element={<Dashboard />} />
-    <Route path="/reports/activity" element={<Dashboard />} />
-    <Route path="/notifications/email" element={<Dashboard />} />
-    <Route path="/notifications/sms" element={<Dashboard />} />
-    <Route path="/notifications/history" element={<Dashboard />} />
+    <Route path="/reports/usage" element={<EVDashboardPage />} />
+    <Route path="/reports/revenue" element={<EVDashboardPage />} />
+    <Route path="/reports/activity" element={<EVDashboardPage />} />
+    <Route path="/notifications/email" element={<EVDashboardPage />} />
+    <Route path="/notifications/sms" element={<EVDashboardPage />} />
+    <Route path="/notifications/history" element={<EVDashboardPage />} />
   </>
 );
 
-// Import Dashboard for placeholder routes
-import Dashboard from "@/modules/dashboard/pages/DashboardPage";
+// Import EVDashboardPage for placeholder routes
+import { EVDashboardPage } from "@/modules/evdashboard";

@@ -12,8 +12,8 @@ import PromotionDetailPage from "@/modules/payments/pages/promotions/PromotionDe
 import PromotionCreatePage from "@/modules/payments/pages/promotions/PromotionCreatePage";
 import PromotionEditPage from "@/modules/payments/pages/promotions/PromotionEditPage";
 import { WalletsPage, WalletDetailPage } from "@/modules/payments/pages/wallets";
-import TransactionsPage from "@/modules/payments/pages/transactions/TransactionsPage";
-import TransactionDetailPage from "@/modules/payments/pages/transactions/TransactionDetailPage";
+import PaymentsPage from "@/modules/payments/pages/payments/PaymentsPage";
+import PaymentDetailPage from "@/modules/payments/pages/payments/PaymentDetailPage";
 import TaxTemplatesPage from "@/modules/payments/pages/taxTemplates/TaxTemplatesPage";
 import TaxTemplateDetailPage from "@/modules/payments/pages/taxTemplates/TaxTemplateDetailPage";
 import TaxTemplateCreatePage from "@/modules/payments/pages/taxTemplates/TaxTemplateCreatePage";
@@ -62,11 +62,15 @@ export const paymentRoutes = (
       <Route path=":id" element={<WalletDetailPage />} />
     </Route>
     
-    {/* Transactions */}
-    <Route path="transactions">
-      <Route index element={<TransactionsPage />} />
-      <Route path=":id" element={<TransactionDetailPage />} />
+    {/* Payments */}
+    <Route path="payments">
+      <Route index element={<PaymentsPage />} />
+      <Route path=":id" element={<PaymentDetailPage />} />
+      <Route path=":id/refund" element={<PaymentDetailPage />} />
     </Route>
+    
+    {/* Legacy route - redirect to new payments page */}
+    <Route path="transactions" element={<PaymentsPage />} />
     
     {/* Tax Templates */}
     <Route path="tax-templates">

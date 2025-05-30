@@ -5,8 +5,8 @@
 
 import React from 'react';
 import { User, Zap, Wallet, Users, PlugZap, ChevronRight, MoreHorizontal, Calendar, Clock } from 'lucide-react';
-import { EnergyConsumptionChart } from '@/components/dashboard/EnergyConsumptionChart';
-import { RevenueChart } from '@/components/dashboard/RevenueChart';
+import { EnergyConsumptionChart } from '@/modules/dashboard/components/EnergyConsumptionChart';
+import { RevenueChart } from '@/modules/dashboard/components/RevenueChart';
 import { StatCard } from '@/components/ui/stat-card';
 import { ActivityCard, ActivityItem } from '@/components/ui/activity-card';
 import { Button } from '@/components/ui/button';

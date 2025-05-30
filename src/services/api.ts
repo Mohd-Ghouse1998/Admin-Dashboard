@@ -1,3 +1,20 @@
+// API URLs
+const getBaseUrl = () => {
+  const tenantDomain = localStorage.getItem('tenant_domain') || window.location.hostname;
+  const isLocalDev = window.location.hostname === 'localhost' || window.location.hostname.endsWith('.localhost');
+  
+  let baseUrl;
+  if (isLocalDev && tenantDomain !== window.location.hostname) {
+    // Local development with a specific tenant domain
+    baseUrl = `http://${tenantDomain}/api`;
+  } else {
+    // Production or local development without a specific tenant
+    baseUrl = `${window.location.origin}/api`;
+  }
+  
+  console.log(`API Base URL: ${baseUrl}`);
+  return baseUrl;
+};
 
 // Base API service for authenticated requests
 export const apiService = {
@@ -118,26 +135,6 @@ export const apiService = {
       throw error;
     }
   },
-};
-
-// API URLs
-const getBaseUrl = () => {
-  // For local development with localhost
-  if (window.location.hostname === 'localhost') {
-    return 'http://localhost:8000';
-  }
-  
-  // Extract tenant subdomain for API calls
-  const hostname = window.location.hostname;
-  const isLocalDev = hostname.includes('localhost');
-  
-  if (isLocalDev) {
-    // Format like tenant.localhost:8000 - make sure to include the backend port
-    return `http://${hostname}:8000`;
-  }
-  
-  // Production environment uses https
-  return `https://${hostname}/api`;
 };
 
 // User module API endpoints

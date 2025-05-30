@@ -7,9 +7,27 @@ import {
   SessionBilling, 
   SessionBillingListResponse,
   PaymentFilters,
-  SessionBillingFilters
+  SessionBillingFilters,
+  PaymentStatus,
+  PaymentMethod
 } from '@/types/payment.types';
 import { apiService } from '@/services/api';
+
+// Define the PaymentStats interface
+export interface PaymentStats {
+  total_revenue: number;
+  total_refunds: number;
+  pending_amount: number;
+  total_count: number;
+  completed_count: number;
+  pending_count: number;
+  failed_count: number;
+  trends?: {
+    revenue: number;
+    refunds: number;
+    pending: number;
+  };
+}
 
 // Payment Management service
 // This service handles all API calls related to payments and session billings
@@ -33,9 +51,35 @@ export const paymentService = {
       }
       
       const queryString = queryParams.toString() ? `?${queryParams.toString()}` : '';
-      return await apiService.get(`/api/users/payments/${queryString}`, accessToken);
-    } catch (error) {
-      console.error('Error fetching payments:', error);
+      
+      // Important: Don't include '/api' in the endpoint as apiService already handles that
+      const endpoint = `/users/payments${queryString}`;
+      
+      console.log('======= PAYMENT API REQUEST =======');
+      console.log('Endpoint:', endpoint);
+      console.log('Token (first 10 chars):', accessToken ? (accessToken.substring(0, 10) + '...') : 'No token');
+      console.log('Filters:', filters);
+      
+      // Use apiService instead of direct fetch - this ensures consistent error handling
+      // and proper base URL construction
+      const result = await apiService.get(endpoint, accessToken);
+      
+      console.log('======= PAYMENT API RESPONSE =======');
+      console.log('Success:', true);
+      console.log('Response type:', typeof result);
+      console.log('Has results array:', Array.isArray(result?.results));
+      console.log('Results count:', result?.results?.length || 0);
+      console.log('First result (if any):', result?.results?.[0] || 'No results');
+      
+      return result;
+    } catch (error: any) {
+      console.error('======= PAYMENT API ERROR =======');
+      console.error('Error type:', error.constructor?.name || typeof error);
+      console.error('Error message:', error.message);
+      console.error('Error stack:', error.stack);
+      console.error('Is network error:', error.message?.includes('NetworkError') || 
+                           error.message?.includes('Failed to fetch') || 
+                           error.message?.includes('Network request failed'));
       throw error;
     }
   },
@@ -43,7 +87,7 @@ export const paymentService = {
   // Get payment by ID - Fixed endpoint to use /users/payments/{id}/
   getPaymentById: async (accessToken: string, id: string): Promise<Payment> => {
     try {
-      return await apiService.get(`/api/users/payments/${id}/`, accessToken);
+      return await apiService.get(`/users/payments/${id}/`, accessToken);
     } catch (error) {
       console.error(`Error fetching payment ${id}:`, error);
       throw error;
@@ -54,7 +98,7 @@ export const paymentService = {
   getPaymentTransactions: async (accessToken: string, paymentId: string): Promise<any> => {
     try {
       // Changed endpoint to ensure it aligns with backend API structure
-      return await apiService.get(`/api/users/payments/${paymentId}/transaction/`, accessToken);
+      return await apiService.get(`/users/payments/${paymentId}/transaction/`, accessToken);
     } catch (error) {
       console.error(`Error fetching payment transactions: ${error}`);
       throw error;
@@ -64,7 +108,7 @@ export const paymentService = {
   // Update payment information
   updatePayment: async (accessToken: string, id: string, data: PaymentUpdateRequest): Promise<Payment> => {
     try {
-      return await apiService.put(`/api/users/payments/${id}/`, data, accessToken);
+      return await apiService.put(`/users/payments/${id}/`, data, accessToken);
     } catch (error) {
       console.error(`Error updating payment ${id}:`, error);
       throw error;
@@ -89,7 +133,7 @@ export const paymentService = {
       }
       
       const queryString = queryParams.toString() ? `?${queryParams.toString()}` : '';
-      return await apiService.get(`/api/users/session-billings/${queryString}`, accessToken);
+      return await apiService.get(`/users/session-billings/${queryString}`, accessToken);
     } catch (error) {
       console.error('Error fetching session billings:', error);
       throw error;
@@ -99,10 +143,32 @@ export const paymentService = {
   // Get session billing by ID
   getSessionBillingById: async (accessToken: string, id: string): Promise<SessionBilling> => {
     try {
-      return await apiService.get(`/api/users/session-billings/${id}/`, accessToken);
+      return await apiService.get(`/users/session-billings/${id}/`, accessToken);
     } catch (error) {
       console.error(`Error fetching session billing ${id}:`, error);
       throw error;
     }
-  }
+  },
+  
+  // Get payment statistics for KPI cards
+  getPaymentStats: async (accessToken: string): Promise<PaymentStats> => {
+    try {
+      console.log('Fetching payment stats from API...');
+      
+      // Important: Don't include '/api' in the endpoint as apiService already handles that
+      const endpoint = '/users/payments/stats/';
+      
+      console.log('Using apiService to fetch stats from:', endpoint);
+      
+      // Use apiService for consistent error handling and URL construction
+      const result = await apiService.get(endpoint, accessToken);
+      
+      console.log('Stats API response:', result);
+      
+      return result;
+    } catch (error) {
+      console.error('Error fetching payment stats:', error);
+      throw error;
+    }
+  },
 };

@@ -84,15 +84,15 @@ export interface NavSection {
 
 // Navigation configuration
 export const navigationConfig: NavSection[] = [
-  // Dashboard
+  // EV Dashboard as main dashboard
   {
-    id: "dashboard",
+    id: "ev-dashboard",
     name: "Dashboard",
     icon: LayoutDashboard,
     items: [
       {
         name: "Dashboard",
-        href: "/",
+        href: "/", // Main route points to EV Dashboard
         icon: LayoutDashboard,
       },
     ],

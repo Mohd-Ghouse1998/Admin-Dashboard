@@ -26,7 +26,7 @@ export const PageLayout: React.FC<PageLayoutProps> = ({
   noCard = false
 }) => {
   return (
-    <div className="container mx-auto px-4 py-6">
+    <div className="container mx-auto px-2 py-3">
       <PageHeader
         title={title}
         description={description}
@@ -36,7 +36,7 @@ export const PageLayout: React.FC<PageLayoutProps> = ({
         backTo={backTo}
         createRoute={createRoute}
       />
-      <div className={`mt-6 ${noCard ? '' : 'bg-card rounded-lg border p-6'}`}>
+      <div className={`mt-3 ${noCard ? '' : 'bg-card rounded-lg border p-4'}`}>
         {children}
       </div>
     </div>

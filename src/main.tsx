@@ -11,6 +11,7 @@ import './index.css';
 import './styles/material-icons.css';
 import { AuthProvider } from './contexts/AuthContext';
 import { TenantProvider } from './contexts/TenantContext';
+import { GoogleMapsProvider } from './contexts/GoogleMapsContext';
 
 // Create a query client for React Query
 const queryClient = new QueryClient({
@@ -29,11 +30,13 @@ ReactDOM.createRoot(document.getElementById('root')!).render(
         <QueryClientProvider client={queryClient}>
           <TenantProvider>
             <AuthProvider>
-              <ThemeProvider defaultTheme="light" storageKey="ui-theme">
-                <TooltipProvider>
-                  <OCPIAppWrapper />
-                </TooltipProvider>
-              </ThemeProvider>
+              <GoogleMapsProvider>
+                <ThemeProvider defaultTheme="light" storageKey="ui-theme">
+                  <TooltipProvider>
+                    <OCPIAppWrapper />
+                  </TooltipProvider>
+                </ThemeProvider>
+              </GoogleMapsProvider>
             </AuthProvider>
           </TenantProvider>
         </QueryClientProvider>

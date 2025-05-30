@@ -2,7 +2,7 @@ import React from 'react';
 import { RouteObject } from 'react-router-dom';
 import AppLayout from '@/components/layout/AppLayout';
 import GuestLayout from '@/components/layout/GuestLayout';
-import Dashboard from '@/modules/dashboard/pages/DashboardPage';
+import { EVDashboardPage } from '@/modules/evdashboard';
 import ModernLoginPage from '@/modules/auth/pages/ModernLoginPage';
 import RegisterPage from "@/modules/auth/pages/register";
 import ForgotPasswordPage from "@/modules/auth/pages/forgot-password";
@@ -38,11 +38,11 @@ export const modernRoutes: RouteObject[] = [
     children: [
       {
         path: '',
-        element: <Dashboard />,
+        element: <EVDashboardPage />,
       },
       {
         path: 'dashboard',
-        element: <Dashboard />,
+        element: <EVDashboardPage />,
       },
       // Add other modern routes here as they are developed
     ],
